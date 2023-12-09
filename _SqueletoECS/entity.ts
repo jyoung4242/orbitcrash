@@ -14,7 +14,7 @@ export class Entity {
       left:0;
     }
   </style>
-  <entity-layer \${===render} class="entity" style="
+  <entity-layer \${===render} class="entity \${css}" style="
     transform: translate3d(\${position.x}px,\${position.y}px, 0px);
     width: \${size.x}px;
     height: \${size.y}px;

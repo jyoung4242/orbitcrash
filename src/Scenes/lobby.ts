@@ -5,10 +5,24 @@ import { UI } from "@peasy-lib/peasy-ui";
 import { Region, LobbyVisibility } from "@hathora/cloud-sdk-typescript/dist/sdk/models/shared";
 
 export class Lobby extends Scene {
+  lobbyInterval: NodeJS.Timeout | undefined;
   name: string = "lobby";
   createPublic = () => {
-    window.myHathoraClient.createRoom(LobbyVisibility.Public, Region.Chicago, {});
+    window.myHathoraClient.createRoom(LobbyVisibility.Local, Region.Chicago, {});
   };
+  joinPublic = (_e: any, m: any) => {
+    let roomToJoin = m.match.id;
+    console.log("Joining Room", roomToJoin);
+    window.myHathoraClient.enterRoom(roomToJoin);
+    this.exit();
+  };
+  joinDirectPublic = (_e: any, m: any) => {
+    let roomToJoin = this.directPublicID;
+    console.log("Joining Room", roomToJoin);
+    window.myHathoraClient.enterRoom(roomToJoin);
+    this.exit();
+  };
+  directPublicID = "";
   userdata = {
     id: "",
     name: "",
@@ -40,16 +54,14 @@ export class Lobby extends Scene {
               <div>Details</div>
               <div>Join</div>
             </div>
-          <div class="openMatches" \${match<=*openMatches}>
-            <div class="openMatch">
-              <div class="matches_rid">myroomid123</div>
-              <div class="matches_creator">1234123</div>
-              <div class="matches_deets"> created: 1/1/24</div>
-              <div class="matches_join_button">JOIN</div>
+            <div class="openMatches" >
+              <div class="openMatch" \${match <=* openMatches:id}>
+                <div class="matches_rid">\${match.id}</div>
+                <div class="matches_creator">\${match.who}</div>
+                <div class="matches_deets">\${match.when}</div>
+                <div class="matches_join_button" \${click@=>joinPublic}>JOIN</div>
+              </div>
             </div>
-           
-          </div>
-            
           </div>
           <div class="createblock">
             <div>Create New Match</div>
@@ -68,8 +80,8 @@ export class Lobby extends Scene {
           <div class="joinblock">
             <div class="lobby_join_title">Join Match</div>
             <div class="matchInput_container">
-              <input type="text" max="13" class="matchInput"/>
-              <div class="matchJoinButton matches_join_button">JOIN</div>
+              <input type="text" max="13" class="matchInput"/ \${value<=>directPublicID}>
+              <div class="matchJoinButton matches_join_button" \${click@=>joinDirectPublic}>JOIN</div>
             </div>
           </div>
 
@@ -77,13 +89,13 @@ export class Lobby extends Scene {
     </scene-layer>
   `;
 
-  async updateLobby() {
-    //let rooms = await window.myHathoraClient.getPublicLobbies();
-    //console.log("rooms: ", rooms);
-    // if (rooms && rooms?.length > 0) {
-    //   this.openMatches = [...rooms];
-    // }
-  }
+  updateLobby = () => {
+    //while local, just use window.localmatches
+    console.log(window.localMatches);
+
+    this.openMatches = [...window.localMatches];
+    console.log(this.openMatches);
+  };
 
   public enter = async (previous: State | null, ...params: any[]): Promise<void> => {
     //load HUD
@@ -96,6 +108,10 @@ export class Lobby extends Scene {
     let layers = SceneManager.viewport.layers;
     let hud = layers.find(lyr => lyr.name == "hud");
     if (hud) UI.create(hud.element, this, this.template);
-    setInterval(this.updateLobby, 2500);
+    this.lobbyInterval = setInterval(this.updateLobby, 2500);
   };
+
+  public exit(): void {
+    clearInterval(this.lobbyInterval);
+  }
 }

@@ -202,6 +202,7 @@ body {
 
 .matchInput {
   width: 60%;
+  font-size: x-small;
 }
 
 .matchJoinButton {
@@ -230,6 +231,10 @@ body {
   background-image: -ms-linear-gradient(-45deg, rgba(255, 255, 220, 0.3) 0%, transparent 100%);
 }
 
+.moving {
+  transition: transform 0.6s ease-in-out;
+}
+
 .blur {
   filter: blur(3px);
 }
@@ -256,6 +261,8 @@ waiting-modal {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  opacity: 1;
+  transition: opacity 0.4s;
 }
 
 .waiting_secondary {
@@ -278,6 +285,8 @@ confirm-modal {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  opacity: 1;
+  transition: opacity 0.4s;
 }
 
 .confirm_title {
@@ -322,10 +331,24 @@ confirm-modal {
   padding: 2px 8px;
   transition: all 0.3s;
 }
+.confirm_ready.wrongplayer {
+  background-color: rgba(10, 27, 40, 0.289);
+  cursor: not-allowed;
+}
+
+.pui-adding {
+  opacity: 1;
+}
+.pui-removing {
+  opacity: 0;
+}
 
 .confirm_ready:hover {
   box-shadow: rgba(255, 255, 255, 0.2) 0 3px 15px inset, rgba(0, 0, 0, 0.1) 0 3px 5px, rgba(0, 0, 0, 0.1) 0 10px 13px;
   transform: scale(1.05);
+}
+.confirm_icon.wrongplayer:hover {
+  transform: scale(1);
 }
 
 .waiting {
@@ -351,9 +374,75 @@ replay-modal {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  opacity: 1;
   width: 25%;
+  transition: opacity 0.4s linear;
 }
 
 .no-wrap {
   width: 75%;
+}
+
+toast-layer {
+  opacity: 1;
+  padding-left: 25px;
+  padding-right: 25px;
+  background-color: #222222;
+  color: whitesmoke;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  font-size: large;
+  transition: opacity 0.5s linear;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  bottom: 0;
+  width: auto;
+  aspect-ratio: 4/1;
+  border: 2px solid whitesmoke;
+  border-radius: 4px;
+}
+
+player-identifier {
+  font-size: 0.5vw;
+  padding-left: 5px;
+}
+
+turn-identifier {
+  position: absolute;
+  bottom: 5px;
+  left: 5px;
+  font-size: 0.5vw;
+}
+
+.endturncontainer {
+  opacity: 1;
+  padding-left: 25px;
+  padding-right: 25px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  background-color: #222222;
+  color: whitesmoke;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  font-size: medium;
+  transition: opacity 0.5s linear;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  top: 35%;
+  width: auto;
+  aspect-ratio: 4/1;
+  border: 2px solid whitesmoke;
+  border-radius: 4px;
+  gap: 10px;
+  text-align: center;
 }

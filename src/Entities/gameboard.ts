@@ -10,6 +10,8 @@ export class GameBoard {
       id: uuidv4(),
       components: {
         render: true,
+        type: "board",
+        css: "",
         sprites: {
           data: [
             {

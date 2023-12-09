@@ -3,10 +3,12 @@ import { Entity } from "../../_SqueletoECS/entity";
 import { Vector } from "../../_SqueletoECS/Vector";
 
 export class Token {
-  static create(id: number, color: string, position: Vector) {
+  static create(id: number, color: string, playerDes: string, position: Vector) {
     return Entity.create({
       id: uuidv4(),
       components: {
+        css: "",
+        type: "token",
         index: id,
         color,
         highlight: {
@@ -21,6 +23,8 @@ export class Token {
         size: { data: [16, 16] },
         opacity: 1,
         render: true,
+        mousebind: false,
+        playerdesignator: playerDes,
       },
     });
   }

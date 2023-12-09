@@ -9,3 +9,15 @@ export enum gameStates {
 export const VIEWPORT_WIDTH = 400;
 export const ASPECT_RATIO = 16 / 9;
 export const VIEWPORT_HEIGHT = VIEWPORT_WIDTH / ASPECT_RATIO;
+
+export enum turnStates {
+  idle = "idle",
+  start = "start",
+  selectToken = "select",
+  selectTokenPlayerOnly = "selectPlayer",
+  playerSelected = "player",
+  opponentSelected = "opponent",
+  transition = "transition",
+  checkingVictory = "victorycheck",
+  nextTurn = "next",
+}

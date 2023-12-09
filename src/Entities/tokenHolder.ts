@@ -12,6 +12,8 @@ export class TokenHolder {
     return Entity.create({
       id: uuidv4(),
       components: {
+        type: "holder",
+        css: "",
         sprites: {
           data: [
             {

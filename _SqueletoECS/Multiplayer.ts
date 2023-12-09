@@ -2,6 +2,7 @@ import { HathoraClient, HathoraConnection, ConnectionDetails } from "@hathora/cl
 import { HathoraCloud } from "@hathora/cloud-sdk-typescript";
 import { LobbyVisibility, Region } from "@hathora/cloud-sdk-typescript/dist/sdk/models/shared";
 import { GetConnectionInfoResponse } from "@hathora/cloud-sdk-typescript/dist/sdk/models/operations";
+import { log } from "console";
 
 let hathoraSdk: HathoraCloud;
 
@@ -133,7 +134,7 @@ export class MultiPlayerInterface {
       console.log(region, visibility);
 
       let { lobbyV3 } = await this.lobbyClient.createLobby(
-        { createLobbyV3Params: { region, visibility } },
+        { createLobbyV3Params: { region, visibility, roomConfig: JSON.stringify(config) } },
         { playerAuth: this.token }
       );
       console.log(lobbyV3);
@@ -147,8 +148,15 @@ export class MultiPlayerInterface {
           initialConfig: config,
         }
       ); */
-
       if (lobbyV3) this.roomID = lobbyV3.roomId;
+      const currentDate = new Date();
+      const shortDateTimeFormat = currentDate.toLocaleString("en-US"); // Adjust the locale as needed
+
+      console.log(shortDateTimeFormat);
+      if (this.matchScope == LobbyVisibility.Local) {
+        window.localMatches.push({ id: this.roomID, who: window.globalstate.user.id, when: shortDateTimeFormat });
+        console.log(this.roomID, window.globalstate.user.id, shortDateTimeFormat);
+      }
     }
     console.log("Rooom SETUP ***********************************************************");
     console.log("roomid: ", this.roomID);
@@ -177,21 +185,23 @@ export class MultiPlayerInterface {
     console.log("Entering: ", roomId);
 
     let connectionInfo;
-    if (this.matchScope == "local") {
+    console.log(this.matchScope);
+
+    if (this.matchScope == LobbyVisibility.Local) {
       connectionInfo = LOCAL_CONNECTION_DETAILS;
     } else {
       let ConnectionDetails: GetConnectionInfoResponse = await this.roomClient.getConnectionInfo(roomId, this.appID);
       //await this.roomClient.getConnectionInfo(
-
       connectionInfo = ConnectionDetails.connectionInfoV2?.exposedPort;
-      //connectionInfo = ConnectionDetails.exposedPort;
     }
-
+    console.log("connection info", connectionInfo);
     if (connectionInfo) {
       this.connection = new HathoraConnection(roomId, connectionInfo);
       this.currentRoom = roomId;
       this.connection.onMessageJson(this.getJSONmsg);
       this.connection.onClose(this.onClose);
+      console.log("starting connection");
+
       await this.connection.connect(this.token as string);
     }
   }
