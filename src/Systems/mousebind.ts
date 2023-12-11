@@ -30,7 +30,11 @@ export class MouseBindSystem extends System {
     let rect = SceneManager.viewport.element.getBoundingClientRect();
     this.viewportXoffset = rect.left;
     this.viewportYoffset = rect.top;
+
+    document.addEventListener("resize", this.resizeHandler);
   }
+
+  resizeHandler = () => {};
 
   mousemovehandler = (e: MouseEvent) => {
     if (this.timerCheck) {

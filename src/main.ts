@@ -3,7 +3,7 @@ import { Viewport } from "@peasy-lib/peasy-viewport";
 import { SceneManager } from "../_SqueletoECS/Scene";
 import { HathoraConnection } from "@hathora/client-sdk";
 import { AuthenticationType, MultiPlayerInterface } from "../_SqueletoECS/Multiplayer";
-import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from "./types";
+import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT, gameVictoryStates } from "./types";
 import { Signal } from "../_SqueletoECS/Signals";
 
 import "./style.css";
@@ -18,6 +18,7 @@ declare global {
   interface Window {
     localMatches: any[];
     globalstate: {
+      victoryState: gameVictoryStates;
       p1state: boolean;
       p2state: boolean;
       p1Holder: any[];
@@ -44,7 +45,7 @@ window.localMatches = [];
 window.appID = "app-52044e66-ed56-4479-b2cb-4997622a9472";
 window.stateUpdate = (state: any) => {
   console.log("state updated:", state);
-
+  window.globalstate.victoryState = state.victoryState;
   window.globalstate.players = [...state.players];
   window.globalstate.p1state = state.p1State;
   window.globalstate.p2state = state.p2State;
@@ -71,6 +72,7 @@ window.globalstate = {
   gamestate: "idle",
   turnstate: "start",
   spots: [],
+  victoryState: gameVictoryStates.unknown,
 };
 
 window.myHathoraClient = new MultiPlayerInterface(

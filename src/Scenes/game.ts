@@ -9,9 +9,10 @@ import { Assets } from "@peasy-lib/peasy-assets";
 import { Token } from "../Entities/token";
 import { Vector } from "../../_SqueletoECS/Vector";
 import { Signal } from "../../_SqueletoECS/Signals";
-import { turnStates } from "../types";
+import { gameVictoryStates, turnStates } from "../types";
 // Systems
 import { MouseBindSystem } from "../Systems/mousebind";
+import { Entity } from "../../_SqueletoECS/entity";
 
 // Entities
 
@@ -71,6 +72,7 @@ let spaceCoords = [
 
 export class Game extends Scene {
   selectedIndex = 0;
+  gameResult = "Draw";
   UISignal = new Signal("uiEvent");
   spotLocations = [
     { position: spaceCoords[0], highlight: "transparent", player: "", playerIndex: null },
@@ -138,6 +140,7 @@ export class Game extends Scene {
   showWaiting = false;
   showConfirm = false;
   showReplay = false;
+  showPlayerLeft = false;
   isEndTurn = false;
 
   get showEndTurn() {
@@ -176,6 +179,11 @@ export class Game extends Scene {
     } else return "wrongplayer";
   }
 
+  get isDraw() {
+    if (this.gameResult == gameVictoryStates.draw) return true;
+    else return false;
+  }
+
   get isPlayer1Active() {
     if (window.globalstate.p1state) return "ready";
     else return "waiting";
@@ -191,6 +199,21 @@ export class Game extends Scene {
   };
   setPlayer2Ready = () => {
     window.myHathoraClient.sendMessage("readyAck2", "");
+  };
+
+  leaveGame = async () => {
+    await window.myHathoraClient.leaveRoom();
+    window.sceneMgr.set("lobby");
+  };
+
+  resetGame = () => {
+    window.myHathoraClient.sendMessage("resetGame", this.playerIdentifier);
+    this.showReplay = false;
+  };
+
+  backToWaiting = () => {
+    window.myHathoraClient.sendMessage("backToWaiting", this.playerIdentifier);
+    this.showPlayerLeft = false;
   };
 
   endTurn = () => {
@@ -289,6 +312,10 @@ export class Game extends Scene {
           let tokenIndex = this.selectedIndex;
           let spotSelected = m.spot.$index;
 
+          console.log(playerDes, tokenIndex);
+          console.log("model ", m.spot);
+          console.log("object model ", o);
+
           // remove mouse binding
           let thisEntity: any = this.entities.find((ent: any) => ent.index == tokenIndex && ent.playerdesignator == playerDes);
           if (thisEntity == undefined) throw new Error("Error in identifying proper token");
@@ -298,17 +325,18 @@ export class Game extends Scene {
         }
         break;
       case turnStates.opponentSelected:
-        // opponent's token selected - looking for a place to move token
-        // confirm spot is highlighted
-        if (m.spot.highlight != "whitesmoke") return;
-        // tell server which spot selected
-        // remove mouse binding
         {
+          // opponent's token selected - looking for a place to move token
+          // confirm spot is highlighted
           if (m.spot.highlight != "whitesmoke") return;
+          // tell server which spot selected
+          // remove mouse binding
+
           let playerDes = playerIndex == 0 ? "player2" : "player1";
           let tokenIndex = this.selectedIndex;
           let spotSelected = m.spot.$index;
           console.log("state: ", window.globalstate);
+          console.log("token data", playerDes, tokenIndex, spotSelected);
 
           // remove mouse binding
           let thisEntity: any = this.entities.find((ent: any) => ent.index == tokenIndex && ent.playerdesignator == playerDes);
@@ -361,16 +389,7 @@ export class Game extends Scene {
       </div>
     </confirm-modal>
     <hud-layer class="gameHudTitle \${blur}" >Orbit Connect</hud-layer>
-    <replay-modal \${===showReplay}>
-      <div class="confirm_innerflex no-wrap">
-        <div class="">Orbit Connect</div>
-        <div class="">PLAY AGAIN?</div>
-        <div class="confirm_outerflex">
-          <div class="confirm_ready">YES</div>
-          <div class="confirm_ready">NO</div>
-        </div>
-      </div>
-    </replay-modal>
+   
     <blur-layer \${===showBlur}></blur-layer>
     <player-identifier>You are \${playerIdentifier}</player-identifier>
     <turn-identifier>It is \${turnIdentifier}'s turn</turn-identifier>
@@ -378,6 +397,25 @@ export class Game extends Scene {
       <div class="endturncontent">Your turn is completed, ready to change turns?</div>
       <div class="confirm_ready" \${click@=>endTurn}>END TURN</div>
     </end-turn>
+    <player-left \${===showPlayerLeft}>
+        <div>The other player left the match</div>
+        <div style="display: flex;  gap: 5px;">
+            <div \${click@=>backToWaiting} class="confirm_ready">Reset</div>
+            <div \${click@=>leaveGame} class="confirm_ready">Leave</div>
+          </div>
+    </player-left>
+    <replay-modal \${===showReplay}>
+        <div \${!==isDraw}>Game Result: \${gameResult} Won!!!</div>
+        <div \${===isDraw}>Game Result: Draw!!!</div>
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <div>Would you like to play again? Both players must click rematch</div>
+          <div style="display: flex;  gap: 5px;">
+            <div \${click@=>resetGame} class="confirm_ready">Rematch?</div>
+            <div \${click@=>leaveGame} class="confirm_ready">Leave</div>
+          </div>
+          
+        </div>
+    </replay-modal>
   `;
 
   public template = `
@@ -423,7 +461,13 @@ export class Game extends Scene {
     }
 
     //Systems being added for Scene to own
-    this.sceneSystems.push(new MouseBindSystem(75, 3, 16));
+    //get window size first
+    let windowsize = window.innerWidth;
+    let scale;
+    if (windowsize <= 800) scale = 1;
+    else if (windowsize <= 1200) scale = 2;
+    else scale = 3;
+    this.sceneSystems.push(new MouseBindSystem(75, scale, 16));
 
     console.log(this.entities);
 
@@ -434,6 +478,29 @@ export class Game extends Scene {
   uieventhandler = (signalDetails: CustomEvent) => {
     console.log("received ui event", signalDetails.detail.params);
     switch (signalDetails.detail.params[0]) {
+      case "playerLeft":
+        this.showPlayerLeft = true;
+        this.showBlur = true;
+        break;
+      case "resetUI":
+        {
+          this.showBlur = false;
+          this.showWaiting = false;
+          this.showConfirm = false;
+          this.showReplay = false;
+          let tokens = this.entities.filter((tok: any) => tok.type == "token");
+          tokens.forEach((token: any) => {
+            if (token.playerdesignator == "player1") {
+              token.position.x = positionLookup[token.index].left.x;
+              token.position.y = positionLookup[token.index].left.y;
+            } else {
+              token.position.x = positionLookup[token.index].right.x;
+              token.position.y = positionLookup[token.index].right.y;
+            }
+          });
+          this.stateUpdate();
+        }
+        break;
       case "newTurn":
         console.log("clearing endturn");
         this.isEndTurn = false;
@@ -449,7 +516,11 @@ export class Game extends Scene {
             thisEntity.position.y = this.spotLocations[spotIndex].position.y;
           }
         });
-        window.myHathoraClient.sendMessage("readyToTransition", "");
+
+        if (window.globalstate.turnstate == turnStates.playerSelected) {
+          window.myHathoraClient.sendMessage("readyToTransition", "");
+        } else if (window.globalstate.turnstate == turnStates.opponentSelected) {
+        }
 
         break;
       case "updateBoardPositions":
@@ -459,10 +530,12 @@ export class Game extends Scene {
         tokens.forEach((tok: any) => {
           tok.css = " moving";
         });
+        console.log("spot data", window.globalstate.spots);
 
         window.globalstate.spots.forEach((spot, spotIndex) => {
           if (spot.status) {
             let thisEntity: any = this.entities.find((ent: any) => ent.index == spot.index && ent.playerdesignator == spot.player);
+            console.log("entity data: ", thisEntity);
             thisEntity.position.x = this.spotLocations[spotIndex].position.x;
             thisEntity.position.y = this.spotLocations[spotIndex].position.y;
           }
@@ -483,6 +556,9 @@ export class Game extends Scene {
         this.showReplay = false;
         break;
       case "hideWaiting":
+        /*  setTimeout(() => {
+          this.showBlur = false;
+        }, 100); */
         this.showBlur = false;
         this.showWaiting = false;
         this.showConfirm = false;
@@ -495,6 +571,9 @@ export class Game extends Scene {
         this.showReplay = true;
         break;
       case "hideReady":
+        /*  setTimeout(() => {
+          this.showBlur = false;
+        }, 100); */
         this.showBlur = false;
         this.showWaiting = false;
         this.showConfirm = false;
@@ -511,6 +590,26 @@ export class Game extends Scene {
         this.showWaiting = false;
         this.showConfirm = false;
         this.showReplay = false;
+        /*  setTimeout(() => {
+          this.showBlur = false;
+        }, 100); */
+
+        break;
+      case "showReplay":
+        this.gameResult = window.globalstate.victoryState;
+        this.showBlur = true;
+        this.showWaiting = false;
+        this.showConfirm = false;
+        this.showReplay = true;
+        break;
+      case "hideReplay":
+        this.showWaiting = false;
+        this.showConfirm = false;
+        this.showReplay = false;
+        /*  setTimeout(() => {
+          this.showBlur = false;
+        }, 100); */
+        this.showBlur = false;
         break;
       case "showToast":
         this.toastContent = signalDetails.detail.params[1];
@@ -530,6 +629,16 @@ export class Game extends Scene {
         break;
     }
   };
+
+  stateUpdate() {
+    window.globalstate.p1Holder.forEach((val, index) => (this.p1Holderspots[index].highlight = val.highlight));
+    window.globalstate.p2Holder.forEach((val, index) => (this.p2Holderspots[index].highlight = val.highlight));
+    window.globalstate.spots.forEach((val, index) => {
+      this.spotLocations[index].highlight = val.highlight;
+      this.spotLocations[index].player = val.player;
+      this.spotLocations[index].playerIndex = val.index;
+    });
+  }
 
   //GameLoop update method
   update = (deltaTime: number): void | Promise<void> => {

@@ -21,3 +21,10 @@ export enum turnStates {
   checkingVictory = "victorycheck",
   nextTurn = "next",
 }
+
+export enum gameVictoryStates {
+  unknown = "u",
+  player1won = "Player 1",
+  player2won = "Player 2",
+  draw = "Draw",
+}

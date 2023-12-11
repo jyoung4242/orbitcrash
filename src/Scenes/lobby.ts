@@ -91,10 +91,7 @@ export class Lobby extends Scene {
 
   updateLobby = () => {
     //while local, just use window.localmatches
-    console.log(window.localMatches);
-
     this.openMatches = [...window.localMatches];
-    console.log(this.openMatches);
   };
 
   public enter = async (previous: State | null, ...params: any[]): Promise<void> => {

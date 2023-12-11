@@ -266,7 +266,7 @@ waiting-modal {
 }
 
 .waiting_secondary {
-  font-size: 0.18vw;
+  font-size: 0.5vw;
 }
 
 confirm-modal {
@@ -445,4 +445,25 @@ turn-identifier {
   border-radius: 4px;
   gap: 10px;
   text-align: center;
+}
+
+player-left {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: whitesmoke;
+  color: black;
+  padding: 25px;
+  border-radius: 5px;
+  font-size: x-small;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  opacity: 1;
+  width: 25%;
+  transition: opacity 0.4s linear;
 }

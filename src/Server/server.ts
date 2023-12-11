@@ -1,6 +1,6 @@
 import { Application, RoomId, startServer, UserId, verifyJwt } from "@hathora/server-sdk";
 import * as dotenv from "dotenv";
-import { gameStates, turnStates } from "../types.ts";
+import { gameStates, gameVictoryStates, turnStates } from "../types.ts";
 import { Chance } from "chance";
 import { HathoraCloud } from "@hathora/cloud-sdk-typescript";
 import { log } from "console";
@@ -30,6 +30,8 @@ type InternalState = {
   player1state: boolean;
   player2state: boolean;
   turn: "player1" | "player2";
+  transitionLatch: boolean;
+  gameVictoryState: gameVictoryStates;
 };
 
 const roomMap: Map<RoomId, InternalState> = new Map();
@@ -58,6 +60,8 @@ const app: Application = {
           player1state: false,
           player2state: false,
           turn: "player1",
+          transitionLatch: false,
+          gameVictoryState: gameVictoryStates.unknown,
         };
         for (let index = 0; index < 8; index++) {
           gameState.player1holder.push({ status: -1, highlight: "transparent" });
@@ -178,14 +182,16 @@ const app: Application = {
       }
 
       room.players.splice(userIndex, 1);
-
+      room.gamestate = gameStates.WAITING;
+      room.turnstate = turnStates.idle;
+      room.spots = resetSpots();
+      updateState(roomId);
       server.broadcastMessage(
         roomId,
         encoder.encode(
           JSON.stringify({
-            type: "USERLIST",
-            roomID: roomId,
-            users: [...room.players],
+            type: "event",
+            event: "playerLeft",
           })
         )
       );
@@ -200,6 +206,88 @@ const app: Application = {
       const room = roomMap.get(roomId);
       if (!room) return;
       switch (msg.type) {
+        case "backToWaiting":
+          room.player1state = false;
+          room.player2state = false;
+
+          if (msg.msg == "Player 1") room.player1state = true;
+          else if (msg.msg == "Player 2") room.player2state = true;
+          room.player1holder = [];
+          room.player2holder = [];
+
+          for (let index = 0; index < 8; index++) {
+            room.player1holder.push({ status: -1, highlight: "transparent" });
+            room.player2holder.push({ status: -1, highlight: "transparent" });
+          }
+
+          room.gamestate = gameStates.WAITING;
+          room.turnstate = turnStates.idle;
+          //pick starting person
+          if (chance.bool()) {
+            room.turn = "player1";
+          } else room.turn = "player2";
+
+          room.spots = resetSpots();
+          resetHighlights(roomId);
+
+          server.broadcastMessage(
+            roomId,
+            encoder.encode(
+              JSON.stringify({
+                type: "event",
+                event: "resetUI",
+              })
+            )
+          );
+          server.broadcastMessage(
+            roomId,
+            encoder.encode(
+              JSON.stringify({
+                type: "event",
+                event: "showWaiting",
+              })
+            )
+          );
+          break;
+        case "resetGame":
+          if (msg.msg == "Player 1") room.player1state = true;
+          else if (msg.msg == "Player 2") room.player2state = true;
+
+          if (room.player1state && room.player2state) {
+            //reset game
+
+            room.player1holder = [];
+            room.player2holder = [];
+            room.gamestate = gameStates.ACTIVE;
+            room.turnstate = turnStates.selectToken;
+            //pick starting person
+            if (chance.bool()) {
+              room.turn = "player1";
+            } else room.turn = "player2";
+
+            room.spots = resetSpots();
+            for (let index = 0; index < 8; index++) {
+              room.player1holder.push({ status: -1, highlight: "transparent" });
+              room.player2holder.push({ status: -1, highlight: "transparent" });
+            }
+            server.broadcastMessage(
+              roomId,
+              encoder.encode(
+                JSON.stringify({
+                  type: "event",
+                  event: "resetUI",
+                })
+              )
+            );
+            sendToast(roomId, `It is ${room.turn}'s turn to start`);
+            showAvailableMoves(roomId);
+            setTimeout(() => {
+              room.turnstate = turnStates.selectToken;
+              updateState(roomId);
+            }, 2000);
+          }
+
+          break;
         case "endTurn1":
           room.turn = "player2";
           room.turnstate = turnStates.selectToken;
@@ -231,6 +319,8 @@ const app: Application = {
           sendToast(roomId, `It is ${room.turn}'s turn to start`);
           break;
         case "readyToTransition":
+          if (room.transitionLatch) return;
+          room.transitionLatch = true;
           console.log("starting transition");
           console.log("turn: ", room.turn);
           sendToast(roomId, "Transitioning");
@@ -239,6 +329,7 @@ const app: Application = {
             //run transition logic
             transitionTokens(roomId);
           }, 1000);
+
           break;
         case "transitionComplete":
           {
@@ -251,14 +342,15 @@ const app: Application = {
               console.log("game won");
               room.gamestate = gameStates.FINISHED;
               room.turnstate = turnStates.idle;
+              room.player1state = false;
+              room.player2state = false;
               //send UI event to show victory
               server.broadcastMessage(
                 roomId,
                 encoder.encode(
                   JSON.stringify({
                     type: "event",
-                    event: "gameover",
-                    whoWon: vicStatus.player,
+                    event: "showReplay",
                   })
                 )
               );
@@ -275,6 +367,7 @@ const app: Application = {
                 )
               );
             }
+            room.transitionLatch = false;
             updateState(roomId);
           }
           break;
@@ -296,6 +389,10 @@ const app: Application = {
             else room.player2holder[tokenIndex].status = -2;
             room.turnstate = turnStates.opponentSelected;
             //which spot is tokenIndex in?
+
+            room.spots[boardIndex].status = false;
+            room.spots[boardIndex].player = "";
+            room.spots[boardIndex].index = null;
 
             showAvailableOpponentSpotsOnBoard(roomId, boardIndex);
           }
@@ -331,6 +428,7 @@ const app: Application = {
           {
             let { playerDes, tokenIndex, spotSelected } = JSON.parse(msg.msg);
             console.log("turn: ", room.turn);
+
             //set token status in holder
             if (playerDes == "player1") room.player1holder[tokenIndex].status = tokenIndex;
             else room.player2holder[tokenIndex].status = tokenIndex;
@@ -339,7 +437,20 @@ const app: Application = {
             room.spots[spotSelected].status = true;
             room.spots[spotSelected].player = playerDes;
             room.spots[spotSelected].index = tokenIndex;
+
             room.turnstate = turnStates.selectTokenPlayerOnly;
+            updateState(roomId);
+            server.broadcastMessage(
+              roomId,
+              encoder.encode(
+                JSON.stringify({
+                  type: "event",
+                  event: "snapToken",
+                })
+              )
+            );
+
+            resetHighlights(roomId);
             showHighlightsForPlayerOnly(roomId);
           }
           break;
@@ -424,6 +535,7 @@ console.log(`Hathora Server listening on port ${port}`);
 
 const updateState = (roomId: string) => {
   const room = roomMap.get(roomId);
+  if (!room) return;
   console.log("state update");
 
   server.broadcastMessage(
@@ -432,15 +544,16 @@ const updateState = (roomId: string) => {
       JSON.stringify({
         type: "stateupdate",
         roomID: roomId,
-        players: room?.players,
-        state: room?.gamestate,
-        turnstate: room?.turnstate,
-        spots: room?.spots,
-        p1holder: room?.player1holder,
-        p2holder: room?.player2holder,
-        p1State: room?.player1state,
-        p2State: room?.player2state,
-        turn: room?.turn,
+        players: room.players,
+        state: room.gamestate,
+        turnstate: room.turnstate,
+        spots: room.spots,
+        p1holder: room.player1holder,
+        p2holder: room.player2holder,
+        p1State: room.player1state,
+        p2State: room.player2state,
+        turn: room.turn,
+        victoryState: room.gameVictoryState,
       })
     )
   );
@@ -605,21 +718,34 @@ const showHighlightsForPlayerOnly = (roomId: string) => {
 const transitionTokens = (roomId: string) => {
   const room = roomMap.get(roomId);
   if (!room) return;
-
+  console.log("**************************************************************************************");
+  console.log("before", room.spots);
+  console.log("**************************************************************************************");
   //copy room.spots
   let origSpots = room.spots.map(obj => ({ ...obj }));
 
   //reset room.spots
   room.spots = resetSpots();
 
+  console.log("**************************************************************************************");
+  console.log("reset", room.spots);
+  console.log("**************************************************************************************");
+
   //create copy of spots for reference
   //loop through all the spots on board, and move tokens from current index to 'next' index
   origSpots.forEach(spot => {
     // spot has token
     if (spot.status) {
-      room.spots[spot.nextIndex] = spot;
+      room.spots[spot.nextIndex].status = spot.status;
+      room.spots[spot.nextIndex].index = spot.index;
+      room.spots[spot.nextIndex].highlight = spot.highlight;
+      room.spots[spot.nextIndex].player = spot.player;
     }
   });
+
+  console.log("**************************************************************************************");
+  console.log("after", room.spots);
+  console.log("**************************************************************************************");
 
   //loop through spots and assign token positions
   room.spots.forEach((spot, spotIndex) => {
@@ -628,6 +754,10 @@ const transitionTokens = (roomId: string) => {
       else room.player2holder[spot.index].status = spotIndex;
     }
   });
+
+  console.log("**************************************************************************************");
+  console.log("afterreeassignment", room.spots);
+  console.log("**************************************************************************************");
 
   updateState(roomId);
   server.broadcastMessage(
@@ -640,6 +770,7 @@ const transitionTokens = (roomId: string) => {
     )
   );
 };
+
 const resetSpots = (): any[] => {
   let spots = [];
   for (let index = 0; index < 16; index++) {
@@ -695,6 +826,7 @@ const checkVictory = (roomId: string): { status: boolean; player: string } => {
       spotUndertest3.player == "player1" &&
       spotUndertest4.player == "player1"
     ) {
+      room.gameVictoryState = gameVictoryStates.player1won;
       return { status: true, player: "player1" };
     } else if (
       spotUndertest1.player == "player2" &&
@@ -702,6 +834,7 @@ const checkVictory = (roomId: string): { status: boolean; player: string } => {
       spotUndertest3.player == "player2" &&
       spotUndertest4.player == "player2"
     ) {
+      room.gameVictoryState = gameVictoryStates.player2won;
       return { status: true, player: "player2" };
     }
   }
