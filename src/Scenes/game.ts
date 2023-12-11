@@ -556,10 +556,11 @@ export class Game extends Scene {
         this.showReplay = false;
         break;
       case "hideWaiting":
-        /*  setTimeout(() => {
+        /*JWX <-------------   removing these Settimeouts periodically creates the failure condition */
+        setTimeout(() => {
           this.showBlur = false;
-        }, 100); */
-        this.showBlur = false;
+        }, 100);
+
         this.showWaiting = false;
         this.showConfirm = false;
         this.showReplay = false;
@@ -571,10 +572,11 @@ export class Game extends Scene {
         this.showReplay = true;
         break;
       case "hideReady":
-        /*  setTimeout(() => {
+        /*JWX <-------------   removing these Settimeouts periodically creates the failure condition */
+        setTimeout(() => {
           this.showBlur = false;
-        }, 100); */
-        this.showBlur = false;
+        }, 100);
+
         this.showWaiting = false;
         this.showConfirm = false;
         this.showReplay = false;
@@ -586,13 +588,13 @@ export class Game extends Scene {
         this.showReplay = false;
         break;
       case "hideConfirm":
-        this.showBlur = false;
         this.showWaiting = false;
         this.showConfirm = false;
         this.showReplay = false;
-        /*  setTimeout(() => {
+        /*JWX <-------------   removing these Settimeouts periodically creates the failure condition */
+        setTimeout(() => {
           this.showBlur = false;
-        }, 100); */
+        }, 100);
 
         break;
       case "showReplay":
@@ -606,10 +608,11 @@ export class Game extends Scene {
         this.showWaiting = false;
         this.showConfirm = false;
         this.showReplay = false;
-        /*  setTimeout(() => {
+        /*JWX <-------------   removing these Settimeouts periodically creates the failure condition */
+        setTimeout(() => {
           this.showBlur = false;
-        }, 100); */
-        this.showBlur = false;
+        }, 100);
+
         break;
       case "showToast":
         this.toastContent = signalDetails.detail.params[1];
