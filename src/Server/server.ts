@@ -1,6 +1,6 @@
 import { Application, RoomId, startServer, UserId, verifyJwt } from "@hathora/server-sdk";
 import * as dotenv from "dotenv";
-import { gameStates, gameVictoryStates, turnStates } from "../types.ts";
+import { gameStates, gameVictoryStates, turnStates } from "../types";
 import { Chance } from "chance";
 import { HathoraCloud } from "@hathora/cloud-sdk-typescript";
 
@@ -189,12 +189,11 @@ const app: Application = {
       //update room config
       //updateing LobbyService
       let numPlayers = room.players.length;
-      console.log(`updating config: ${roomId}, with num players: ${numPlayers}`);
-      let configResult;
-      console.log("debug", numPlayers, roomId, room);
-
-      if (numPlayers) configResult = await updateRoomConfig(roomId, numPlayers);
-      console.log("configresults: ", configResult);
+      if (numPlayers == 0) {
+        await hathoraSdk.roomV2.destroyRoom(roomId);
+      } else {
+        await updateRoomConfig(roomId, numPlayers);
+      }
 
       updateState(roomId);
       server.broadcastMessage(
