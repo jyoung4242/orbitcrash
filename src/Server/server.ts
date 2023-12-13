@@ -3,12 +3,11 @@ import * as dotenv from "dotenv";
 import { gameStates, gameVictoryStates, turnStates } from "../types.ts";
 import { Chance } from "chance";
 import { HathoraCloud } from "@hathora/cloud-sdk-typescript";
-import { log } from "console";
-import { send } from "process";
 
 dotenv.config();
 
 const chance = new Chance();
+console.log(process.env.DEVELOPER_TOKEN);
 
 const hathoraSdk = new HathoraCloud({
   appId: process.env.HATHORA_APP_ID!,
@@ -29,9 +28,12 @@ type InternalState = {
   turnstate: turnStates;
   player1state: boolean;
   player2state: boolean;
+  p1Tran: boolean;
+  p2Tran: boolean;
   turn: "player1" | "player2";
   transitionLatch: boolean;
   gameVictoryState: gameVictoryStates;
+  drawCycleCount: number;
 };
 
 const roomMap: Map<RoomId, InternalState> = new Map();
@@ -45,12 +47,14 @@ const app: Application = {
     });
   },
   subscribeUser: (roomId: RoomId, userId: UserId): Promise<void> => {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       console.log("new user: ", roomId, userId);
 
       //create room in map
       if (!roomMap.has(roomId)) {
         const gameState: InternalState = {
+          p1Tran: false,
+          p2Tran: false,
           players: [],
           spots: [],
           player1holder: [],
@@ -62,6 +66,7 @@ const app: Application = {
           turn: "player1",
           transitionLatch: false,
           gameVictoryState: gameVictoryStates.unknown,
+          drawCycleCount: 0,
         };
         for (let index = 0; index < 8; index++) {
           gameState.player1holder.push({ status: -1, highlight: "transparent" });
@@ -117,17 +122,12 @@ const app: Application = {
         )
       );
 
-      server.broadcastMessage(
-        roomId,
-        encoder.encode(
-          JSON.stringify({
-            type: "USERLIST",
-            roomID: roomId,
-            //@ts-ignore
-            users: [...roomMap.get(roomId).players],
-          })
-        )
-      );
+      //updateing LobbyService
+      let numPlayers = roomMap.get(roomId)?.players.length;
+      console.log(`updating config: ${roomId}, with num players: ${numPlayers}`);
+      let configResult;
+      if (numPlayers) configResult = await updateRoomConfig(roomId, numPlayers);
+      console.log("configresults: ", configResult);
 
       if (roomMap.get(roomId)?.players.length == 1) {
         server.broadcastMessage(
@@ -165,7 +165,7 @@ const app: Application = {
     });
   },
   unsubscribeUser: (roomId: RoomId, userId: UserId): Promise<void> => {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       console.info("leaving room");
 
       const room = roomMap.get(roomId);
@@ -185,6 +185,17 @@ const app: Application = {
       room.gamestate = gameStates.WAITING;
       room.turnstate = turnStates.idle;
       room.spots = resetSpots();
+
+      //update room config
+      //updateing LobbyService
+      let numPlayers = room.players.length;
+      console.log(`updating config: ${roomId}, with num players: ${numPlayers}`);
+      let configResult;
+      console.log("debug", numPlayers, roomId, room);
+
+      if (numPlayers) configResult = await updateRoomConfig(roomId, numPlayers);
+      console.log("configresults: ", configResult);
+
       updateState(roomId);
       server.broadcastMessage(
         roomId,
@@ -279,7 +290,7 @@ const app: Application = {
                 })
               )
             );
-            sendToast(roomId, `It is ${room.turn}'s turn to start`);
+            sendToast(roomId, `It is ${room.turn}'s turn to start`, 1000);
             showAvailableMoves(roomId);
             setTimeout(() => {
               room.turnstate = turnStates.selectToken;
@@ -289,6 +300,8 @@ const app: Application = {
 
           break;
         case "endTurn1":
+          console.log("receive end turn p1");
+
           room.turn = "player2";
           room.turnstate = turnStates.selectToken;
           server.broadcastMessage(
@@ -300,10 +313,11 @@ const app: Application = {
               })
             )
           );
-          sendToast(roomId, `It is ${room.turn}'s turn to start`);
+          sendToast(roomId, `It is ${room.turn}'s turn to start`, 1000);
           showAvailableMoves(roomId);
           break;
         case "endTurn2":
+          console.log("receive end turn p2");
           room.turn = "player1";
           room.turnstate = turnStates.selectToken;
           showAvailableMoves(roomId);
@@ -316,34 +330,65 @@ const app: Application = {
               })
             )
           );
-          sendToast(roomId, `It is ${room.turn}'s turn to start`);
+          sendToast(roomId, `It is ${room.turn}'s turn to start`, 1000);
           break;
         case "readyToTransition":
-          if (room.transitionLatch) return;
-          room.transitionLatch = true;
+          if (msg.msg == "Player 1") {
+            room.p1Tran = true;
+          } else {
+            room.p2Tran = true;
+          }
+          //if both players haven't acknowledged
+          if (!room.p1Tran || !room.p2Tran) return;
+
           console.log("starting transition");
-          console.log("turn: ", room.turn);
-          sendToast(roomId, "Transitioning");
+          room.p1Tran = room.p2Tran = false;
+          sendToast(roomId, "Transitioning", 1000);
           room.turnstate = turnStates.transition;
           setTimeout(() => {
             //run transition logic
             transitionTokens(roomId);
-          }, 1000);
+          }, 500);
 
           break;
         case "transitionComplete":
+          /*next update, managing both players responses */
+
+          if (msg.msg == "Player 1") {
+            room.p1Tran = true;
+          } else {
+            room.p2Tran = true;
+          }
+
+          //if both players haven't acknowledged
+          if (!room.p1Tran || !room.p2Tran) return;
+          //reset transition flags
+          room.p1Tran = room.p2Tran = false;
+          /*
+              This is the end game process here as it can end on the completion of the last play
+          */
           {
-            console.log("checking victory");
-            console.log("turn: ", room.turn);
+            console.log("**************************************");
+            console.log("TRANSITION COMPLETE");
+            console.log("**************************************");
+
             //check Victory condition
             room.turnstate = turnStates.checkingVictory;
+            console.log("checking victory");
             let vicStatus = checkVictory(roomId);
+
             if (vicStatus.status) {
+              // ************************ */
+              // GAME OVER, SET WINNER
+              // ************************ */
+
+              //set victory conditions and close out game
               console.log("game won");
               room.gamestate = gameStates.FINISHED;
               room.turnstate = turnStates.idle;
               room.player1state = false;
               room.player2state = false;
+              updateState(roomId);
               //send UI event to show victory
               server.broadcastMessage(
                 roomId,
@@ -355,25 +400,84 @@ const app: Application = {
                 )
               );
             } else {
-              console.log("game still going, changing turn");
-              room.turnstate = turnStates.nextTurn;
-              server.broadcastMessage(
-                roomId,
-                encoder.encode(
-                  JSON.stringify({
-                    type: "event",
-                    event: "nextTurn",
-                  })
-                )
-              );
+              // ************************ */
+              // NO WINNER, CHECK FOR DRAW
+              // OR NEXT TURN
+              // ************************ */
+              //is last piece played
+
+              console.log("NO VICTORY");
+              console.log("CHECKING LAST PIECE");
+
+              let isLastPiece = lastPiecePlayed(roomId);
+
+              if (isLastPiece) {
+                console.log("LAST PIECE PLAYED!");
+                //check rotation count
+                if (room.drawCycleCount >= 4) {
+                  console.log("NO MORE DRAW COUNTS");
+                  // ************************ */
+                  // GAME OVER, SET DRAW
+                  // ************************ */
+
+                  //set victory conditions and close out game
+                  console.log("game ended with draw");
+                  room.gamestate = gameStates.FINISHED;
+                  room.turnstate = turnStates.idle;
+                  room.gameVictoryState = gameVictoryStates.draw;
+                  room.player1state = false;
+                  room.player2state = false;
+                  updateState(roomId);
+                  //send UI event to show victory
+                  console.log("sending clients show replay broadcast");
+                  server.broadcastMessage(
+                    roomId,
+                    encoder.encode(
+                      JSON.stringify({
+                        type: "event",
+                        event: "showReplay",
+                      })
+                    )
+                  );
+                } else {
+                  console.log("INC DRAW COUNTS");
+
+                  // ************************ */
+                  // ROTATE AND TEST AGAIN
+                  // ************************ */
+                  room.drawCycleCount++;
+                  //rotate pieces again
+                  room.gamestate = gameStates.DRAWCYCLE;
+                  console.log("SENDING TRANSITION TO CLIENTS");
+                  sendToast(roomId, "Transitioning", 1000);
+                  room.turnstate = turnStates.transition;
+                  setTimeout(() => {
+                    //run transition logic
+                    transitionTokens(roomId);
+                  }, 500);
+                }
+              } else {
+                // ************************ */
+                // NEXT TURN
+                // ************************ */
+                console.log("CHANGING TURN");
+
+                room.turnstate = turnStates.nextTurn;
+                server.broadcastMessage(
+                  roomId,
+                  encoder.encode(
+                    JSON.stringify({
+                      type: "event",
+                      event: "nextTurn",
+                    })
+                  )
+                );
+              }
             }
-            room.transitionLatch = false;
-            updateState(roomId);
           }
           break;
         case "playerTokenSelected":
           {
-            console.log("turn: ", room.turn);
             let { playerDes, tokenIndex } = JSON.parse(msg.msg);
             if (playerDes == "player1") room.player1holder[tokenIndex].status = -2;
             else room.player2holder[tokenIndex].status = -2;
@@ -384,7 +488,7 @@ const app: Application = {
         case "opponentTokenSelected":
           {
             let { playerDes, tokenIndex, boardIndex } = JSON.parse(msg.msg);
-            console.log("opponent selected", playerDes, tokenIndex, boardIndex);
+
             if (playerDes == "player1") room.player1holder[tokenIndex].status = -2;
             else room.player2holder[tokenIndex].status = -2;
             room.turnstate = turnStates.opponentSelected;
@@ -399,9 +503,12 @@ const app: Application = {
           break;
         case "assignPlayerTokenToBoard":
           {
-            console.log("turn: ", room.turn);
+            console.log("received token assignament");
+
             let { playerDes, tokenIndex, spotSelected } = JSON.parse(msg.msg);
             //set token status in holder
+            console.log("request from:", playerDes, tokenIndex, spotSelected);
+
             if (playerDes == "player1") room.player1holder[tokenIndex].status = tokenIndex;
             else room.player2holder[tokenIndex].status = tokenIndex;
 
@@ -427,7 +534,6 @@ const app: Application = {
         case "assignOpponentTokenToBoard":
           {
             let { playerDes, tokenIndex, spotSelected } = JSON.parse(msg.msg);
-            console.log("turn: ", room.turn);
 
             //set token status in holder
             if (playerDes == "player1") room.player1holder[tokenIndex].status = tokenIndex;
@@ -469,7 +575,7 @@ const app: Application = {
                   })
                 )
               );
-              sendToast(roomId, `It is ${room.turn}'s turn to start`);
+              sendToast(roomId, `It is ${room.turn}'s turn to start`, 1000);
               showAvailableMoves(roomId);
               setTimeout(() => {
                 room.turnstate = turnStates.selectToken;
@@ -498,7 +604,7 @@ const app: Application = {
                   })
                 )
               );
-              sendToast(roomId, `It is ${room.turn}'s turn to start`);
+              sendToast(roomId, `It is ${room.turn}'s turn to start`, 1000);
               showAvailableMoves(roomId);
               setTimeout(() => {
                 room.turnstate = turnStates.selectToken;
@@ -559,13 +665,14 @@ const updateState = (roomId: string) => {
   );
 };
 
-const sendToast = (roomId: string, message: string) => {
+const sendToast = (roomId: string, message: string, duration: number) => {
   server.broadcastMessage(
     roomId,
     encoder.encode(
       JSON.stringify({
         type: "showToast",
         message,
+        duration,
       })
     )
   );
@@ -629,11 +736,11 @@ const showAvailableMoves = (roomId: string) => {
 
 const showAvailableOpponentSpotsOnBoard = (roomId: string, boardIndex: number) => {
   const room = roomMap.get(roomId);
-  console.log(boardIndex);
+  //console.log(boardIndex);
 
   //using index, find available spots on board that are unoccumpied by a token
   const neighbors = getNeighborIndices(boardIndex);
-  console.log("neighbors ", neighbors);
+  //console.log("neighbors ", neighbors);
 
   neighbors.forEach(nbr => {
     if (room?.spots[nbr].player == "") {
@@ -643,7 +750,7 @@ const showAvailableOpponentSpotsOnBoard = (roomId: string, boardIndex: number) =
 
   //test if there were no available spots
   if (neighbors.length == 0) {
-    sendToast(roomId, `Please select another token, this has no available moves`);
+    sendToast(roomId, `Please select another token, this has no available moves`, 1000);
   }
 
   updateState(roomId);
@@ -718,18 +825,12 @@ const showHighlightsForPlayerOnly = (roomId: string) => {
 const transitionTokens = (roomId: string) => {
   const room = roomMap.get(roomId);
   if (!room) return;
-  console.log("**************************************************************************************");
-  console.log("before", room.spots);
-  console.log("**************************************************************************************");
+
   //copy room.spots
   let origSpots = room.spots.map(obj => ({ ...obj }));
 
   //reset room.spots
   room.spots = resetSpots();
-
-  console.log("**************************************************************************************");
-  console.log("reset", room.spots);
-  console.log("**************************************************************************************");
 
   //create copy of spots for reference
   //loop through all the spots on board, and move tokens from current index to 'next' index
@@ -743,10 +844,6 @@ const transitionTokens = (roomId: string) => {
     }
   });
 
-  console.log("**************************************************************************************");
-  console.log("after", room.spots);
-  console.log("**************************************************************************************");
-
   //loop through spots and assign token positions
   room.spots.forEach((spot, spotIndex) => {
     if (spot.status) {
@@ -754,10 +851,6 @@ const transitionTokens = (roomId: string) => {
       else room.player2holder[spot.index].status = spotIndex;
     }
   });
-
-  console.log("**************************************************************************************");
-  console.log("afterreeassignment", room.spots);
-  console.log("**************************************************************************************");
 
   updateState(roomId);
   server.broadcastMessage(
@@ -813,7 +906,7 @@ const checkVictory = (roomId: string): { status: boolean; player: string } => {
   victoryConditions.push([3, 7, 11, 15]);
   //Diagnal
   victoryConditions.push([0, 5, 10, 15]);
-  victoryConditions.push([12, 9, 6, 7]);
+  victoryConditions.push([12, 9, 6, 3]);
 
   for (const condition of victoryConditions) {
     const spotUndertest1 = room.spots[condition[0]];
@@ -826,6 +919,8 @@ const checkVictory = (roomId: string): { status: boolean; player: string } => {
       spotUndertest3.player == "player1" &&
       spotUndertest4.player == "player1"
     ) {
+      console.log("player1 vic condition: ", condition);
+
       room.gameVictoryState = gameVictoryStates.player1won;
       return { status: true, player: "player1" };
     } else if (
@@ -834,9 +929,51 @@ const checkVictory = (roomId: string): { status: boolean; player: string } => {
       spotUndertest3.player == "player2" &&
       spotUndertest4.player == "player2"
     ) {
+      console.log("player2 vic condition: ", condition);
       room.gameVictoryState = gameVictoryStates.player2won;
       return { status: true, player: "player2" };
     }
   }
   return { status: false, player: "" };
+};
+
+const checkDraw = (roomId: string) => {
+  const room = roomMap.get(roomId);
+  if (!room) return;
+
+  //a draw condition starts with using ALL the pieces
+  //namely all the holder status are >=0
+  const p1test = room.player1holder.some(tok => tok.status < 0);
+  const p2test = room.player2holder.some(tok => tok.status < 0);
+  if (p1test || p2test) return;
+
+  //change gamestate and manage turn states to perform the 5 iterations of
+  //cycling tokens and testing victory condition
+  room.gamestate = gameStates.DRAWCYCLE;
+  room.turnstate = turnStates.idle;
+
+  sendToast(roomId, "CHECKING FOR DRAW", 1000);
+  updateState(roomId);
+};
+
+const lastPiecePlayed = (roomId: string): boolean => {
+  const room = roomMap.get(roomId);
+  if (!room) return false;
+
+  //a draw condition starts with using ALL the pieces
+  //namely all the holder status are >=0
+  const p1test = room.player1holder.some(tok => tok.status < 0);
+  const p2test = room.player2holder.some(tok => tok.status < 0);
+  if (p1test || p2test) return false;
+
+  //change gamestate and manage turn states to perform the 5 iterations of
+  //cycling tokens and testing victory condition
+  room.gamestate = gameStates.DRAWCYCLE;
+  room.turnstate = turnStates.idle;
+  return true;
+};
+
+const updateRoomConfig = async (roomId: string, data: number) => {
+  const roomConfig = { status: data };
+  return await hathoraSdk.roomV2.updateRoomConfig({ roomConfig: JSON.stringify(roomConfig) }, roomId);
 };

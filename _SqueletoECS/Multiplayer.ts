@@ -3,6 +3,7 @@ import { HathoraCloud } from "@hathora/cloud-sdk-typescript";
 import { LobbyVisibility, Region } from "@hathora/cloud-sdk-typescript/dist/sdk/models/shared";
 import { GetConnectionInfoResponse } from "@hathora/cloud-sdk-typescript/dist/sdk/models/operations";
 import { log } from "console";
+import { LobbyStatus } from "../src/types";
 
 let hathoraSdk: HathoraCloud;
 
@@ -78,6 +79,10 @@ export class MultiPlayerInterface {
     this.matchScope = scope;
   }
 
+  getServerScope() {
+    return this.matchScope;
+  }
+
   async login() {
     this.token = sessionStorage.getItem("token");
     if (!this.token) {
@@ -108,6 +113,7 @@ export class MultiPlayerInterface {
 
     if (this.token) {
       lobbies = await this.lobbyClient.listActivePublicLobbies(this.appID);
+
       return lobbies;
     }
   }
@@ -154,7 +160,13 @@ export class MultiPlayerInterface {
 
       console.log(shortDateTimeFormat);
       if (this.matchScope == LobbyVisibility.Local) {
-        window.localMatches.push({ id: this.roomID, who: window.globalstate.user.id, when: shortDateTimeFormat });
+        window.localMatches.push({
+          id: this.roomID,
+          type: "local",
+          status: "empty",
+          who: window.globalstate.user.id,
+          when: shortDateTimeFormat,
+        });
         console.log(this.roomID, window.globalstate.user.id, shortDateTimeFormat);
       }
     }
@@ -203,6 +215,7 @@ export class MultiPlayerInterface {
       console.log("starting connection");
 
       await this.connection.connect(this.token as string);
+      console.log("returned from connect command");
     }
   }
 
@@ -213,9 +226,11 @@ export class MultiPlayerInterface {
     }
   }
 
-  async getRoomInfo() {
+  async getRoomInfo(room: string) {
     let roomdetails: any;
-    if (this.roomID) roomdetails = await this.lobbyClient.getLobbyInfoByRoomId(this.roomID, this.appID); //getLobbyInfo(this.appID, this.roomID);
+    if (room) {
+      roomdetails = await this.lobbyClient.getLobbyInfoByRoomId(room, this.appID);
+    } //getLobbyInfo(this.appID, this.roomID);
     return roomdetails;
   }
 

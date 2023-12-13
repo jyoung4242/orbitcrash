@@ -1,4 +1,9 @@
 /*style.css*/
+
+* {
+  user-select: none;
+}
+
 body {
   box-sizing: border-box;
   padding: 0;
@@ -64,7 +69,7 @@ body {
   display: flex;
   justify-content: space-evenly;
   align-items: center;
-  font-size: x-small;
+  font-size: 0.4vw;
   gap: 10px;
 }
 
@@ -95,7 +100,6 @@ body {
 
 .openMatch {
   padding: 2px;
-
   display: flex;
   width: calc(100% - 4px);
   justify-content: space-between;
@@ -112,20 +116,32 @@ body {
   background: #d2cdcd23;
 }
 
-.matches_rid {
-  font-size: xx-small;
+.matches_type {
+  font-size: 0.3vw;
   color: whitesmoke;
 }
+
+.matches_status {
+  font-size: 0.3vw;
+  color: whitesmoke;
+}
+
+.matches_rid {
+  font-size: 0.3vw;
+  color: whitesmoke;
+  user-select: all;
+}
+
 .matches_creator {
-  font-size: xx-small;
+  font-size: 0.3vw;
   color: whitesmoke;
 }
 .matches_deets {
-  font-size: xx-small;
+  font-size: 0.3vw;
   color: whitesmoke;
 }
 .matches_join_button {
-  font-size: xx-small;
+  font-size: 0.3vw;
   border: 1px solid whitesmoke;
   border-radius: 5000px;
   padding: 3px;

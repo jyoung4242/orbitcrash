@@ -3,6 +3,7 @@ export enum gameStates {
   WAITING = "waiting",
   ACTIVE = "active",
   FINISHED = "finished",
+  DRAWCYCLE = "drawtest",
 }
 
 // Setting up Viewport with a HUD layer and the Game layer
@@ -27,4 +28,10 @@ export enum gameVictoryStates {
   player1won = "Player 1",
   player2won = "Player 2",
   draw = "Draw",
+}
+
+export enum LobbyStatus {
+  empty = 0,
+  waiting = 1,
+  full = 2,
 }

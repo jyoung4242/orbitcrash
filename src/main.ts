@@ -87,12 +87,12 @@ window.myHathoraClient = new MultiPlayerInterface(
     } else if (msg.type == "event") {
       UISignal.send([msg.event]);
     } else if (msg.type == "showToast") {
-      UISignal.send([msg.type, msg.message]);
+      UISignal.send([msg.type, msg.message, msg.duration]);
     }
   },
   9000,
   [AuthenticationType.anonymous],
-  true
+  true // true = local, false = cloud
 );
 
 // Scenes

@@ -9,7 +9,7 @@ import { Assets } from "@peasy-lib/peasy-assets";
 import { Token } from "../Entities/token";
 import { Vector } from "../../_SqueletoECS/Vector";
 import { Signal } from "../../_SqueletoECS/Signals";
-import { gameVictoryStates, turnStates } from "../types";
+import { gameStates, gameVictoryStates, turnStates } from "../types";
 // Systems
 import { MouseBindSystem } from "../Systems/mousebind";
 import { Entity } from "../../_SqueletoECS/entity";
@@ -242,6 +242,10 @@ export class Game extends Scene {
         let tokenIndex = m.spot.$index;
         this.selectedIndex = tokenIndex;
 
+        console.log("***********************************************");
+        console.log("player token selected");
+        console.log("***********************************************");
+
         let thisEntity: any = this.entities.find((ent: any) => ent.index == tokenIndex && ent.playerdesignator == playerDes);
         if (thisEntity == undefined) throw new Error("Error in identifying proper token");
         thisEntity.mousebind = true;
@@ -307,11 +311,15 @@ export class Game extends Scene {
         {
           // player's token selected = looking for place to drop token
           // confirm spot clicked is highlighted
+
           if (m.spot.highlight != "whitesmoke") return;
           let playerDes = playerIndex == 0 ? "player1" : "player2";
           let tokenIndex = this.selectedIndex;
           let spotSelected = m.spot.$index;
 
+          console.log("***********************************************");
+          console.log("player part assigned to board");
+          console.log("***********************************************");
           console.log(playerDes, tokenIndex);
           console.log("model ", m.spot);
           console.log("object model ", o);
@@ -321,6 +329,7 @@ export class Game extends Scene {
           if (thisEntity == undefined) throw new Error("Error in identifying proper token");
           thisEntity.mousebind = false;
           // tell server which spot selected
+          console.log("sending server assignPlayerTokenToBoard");
           window.myHathoraClient.sendMessage("assignPlayerTokenToBoard", JSON.stringify({ playerDes, tokenIndex, spotSelected }));
         }
         break;
@@ -335,6 +344,9 @@ export class Game extends Scene {
           let playerDes = playerIndex == 0 ? "player2" : "player1";
           let tokenIndex = this.selectedIndex;
           let spotSelected = m.spot.$index;
+          console.log("***********************************************");
+          console.log("opponent part assigned to board");
+          console.log("***********************************************");
           console.log("state: ", window.globalstate);
           console.log("token data", playerDes, tokenIndex, spotSelected);
 
@@ -428,6 +440,12 @@ export class Game extends Scene {
   public enter = async (previous: State | null, ...params: any[]): Promise<void> => {
     console.info("entering game scene");
 
+    document.addEventListener("keypress", e => {
+      if (this.isEndTurn && e.key == "Enter") {
+        this.endTurn();
+      }
+    });
+
     this.UISignal.listen(this.uieventhandler);
 
     Assets.initialize({ src: "./src/Assets/" });
@@ -518,7 +536,7 @@ export class Game extends Scene {
         });
 
         if (window.globalstate.turnstate == turnStates.playerSelected) {
-          window.myHathoraClient.sendMessage("readyToTransition", "");
+          window.myHathoraClient.sendMessage("readyToTransition", this.playerIdentifier);
         } else if (window.globalstate.turnstate == turnStates.opponentSelected) {
         }
 
@@ -535,7 +553,7 @@ export class Game extends Scene {
         window.globalstate.spots.forEach((spot, spotIndex) => {
           if (spot.status) {
             let thisEntity: any = this.entities.find((ent: any) => ent.index == spot.index && ent.playerdesignator == spot.player);
-            console.log("entity data: ", thisEntity);
+
             thisEntity.position.x = this.spotLocations[spotIndex].position.x;
             thisEntity.position.y = this.spotLocations[spotIndex].position.y;
           }
@@ -545,7 +563,8 @@ export class Game extends Scene {
           tokens.forEach((tok: any) => {
             tok.css = "";
           });
-          window.myHathoraClient.sendMessage("transitionComplete", "");
+
+          window.myHathoraClient.sendMessage("transitionComplete", this.playerIdentifier);
         }, 600);
 
         break;
@@ -616,10 +635,12 @@ export class Game extends Scene {
         break;
       case "showToast":
         this.toastContent = signalDetails.detail.params[1];
+
         this.showToast = true;
+        let duration = signalDetails.detail.params[2];
         setTimeout(() => {
           this.showToast = false;
-        }, 2000);
+        }, duration);
         break;
       case "stateupdate":
         window.globalstate.p1Holder.forEach((val, index) => (this.p1Holderspots[index].highlight = val.highlight));
