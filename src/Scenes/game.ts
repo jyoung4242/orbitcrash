@@ -381,7 +381,7 @@ export class Game extends Scene {
     <toast-layer \${===showToast}>\${toastContent}</toast-layer>
     <waiting-modal \${===showWaiting}>
       <div class="waiting_primary">WAITING ON PLAYER TO JOIN</div>
-      <div class="waiting_secondary">PLEASE STAND BYE....</div>
+      <div class="waiting_secondary">PLEASE STANDBY....</div>
     </waiting-modal>
     <confirm-modal \${===showConfirm}>
       <div class="confirm_title">READY TO START</div>
