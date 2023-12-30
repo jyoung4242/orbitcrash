@@ -22,7 +22,7 @@ export class GameBoard {
           ],
         },
         position: { x: SceneManager.viewport.half.x - 75, y: SceneManager.viewport.half.y - 55 },
-        zindex: 0,
+        zindex: -1,
         size: { data: [150, 150] },
         opacity: 1,
       },

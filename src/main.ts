@@ -33,6 +33,7 @@ declare global {
       turnstate: string;
       spots: any[];
       turn: "player1" | "player2";
+      timeoutcount: number;
     };
     appID: string;
     sceneMgr: any;
@@ -55,6 +56,7 @@ window.stateUpdate = (state: any) => {
   window.globalstate.turn = state.turn;
   window.globalstate.p1Holder = state.p1holder;
   window.globalstate.p2Holder = state.p2holder;
+  window.globalstate.timeoutcount = state.timeOutCount;
   UISignal.send(["stateupdate"]);
 };
 window.globalstate = {
@@ -73,6 +75,7 @@ window.globalstate = {
   turnstate: "start",
   spots: [],
   victoryState: gameVictoryStates.unknown,
+  timeoutcount: 0,
 };
 
 window.myHathoraClient = new MultiPlayerInterface(
@@ -88,6 +91,8 @@ window.myHathoraClient = new MultiPlayerInterface(
       UISignal.send([msg.event]);
     } else if (msg.type == "showToast") {
       UISignal.send([msg.type, msg.message, msg.duration]);
+    } else if (msg.type == "moveToken") {
+      UISignal.send([msg.type, msg.player, msg.token, msg.spot]);
     }
   },
   9000,

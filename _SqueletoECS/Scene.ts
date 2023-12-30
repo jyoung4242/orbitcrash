@@ -17,8 +17,9 @@ export class Scene extends State {
   systems: Array<System> = [];
 
   public async enter(previous: State | null, ...params: any[]) {}
-
+  public async exit() {}
   public leave() {
+    this.exit();
     this.view?.destroy();
     SceneManager.viewport.removeLayers();
   }

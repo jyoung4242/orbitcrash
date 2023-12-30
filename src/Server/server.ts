@@ -1,13 +1,17 @@
 import { Application, RoomId, startServer, UserId, verifyJwt } from "@hathora/server-sdk";
 import * as dotenv from "dotenv";
-import { gameStates, gameVictoryStates, turnStates } from "../types";
+import { gameStates, gameVictoryStates, turnStates } from "../types.ts";
 import { Chance } from "chance";
 import { HathoraCloud } from "@hathora/cloud-sdk-typescript";
+import { AI, AiPersonality, aiPlayerDesignator } from "./serverAI.ts";
 
 dotenv.config();
 
+const TIMER_WARNING = 240; //240
+const TIMER_LIMIT = 300; //300
+
 const chance = new Chance();
-console.log(process.env.DEVELOPER_TOKEN);
+const arrayOfPersonalities: AiPersonality[] = ["aggressive", "balance", "defensive"];
 
 const hathoraSdk = new HathoraCloud({
   appId: process.env.HATHORA_APP_ID!,
@@ -34,6 +38,10 @@ type InternalState = {
   transitionLatch: boolean;
   gameVictoryState: gameVictoryStates;
   drawCycleCount: number;
+  isAIenabled: boolean;
+  AI: undefined | AI;
+  watchDogHandler: NodeJS.Timeout | undefined;
+  watchDogCount: number;
 };
 
 const roomMap: Map<RoomId, InternalState> = new Map();
@@ -67,6 +75,10 @@ const app: Application = {
           transitionLatch: false,
           gameVictoryState: gameVictoryStates.unknown,
           drawCycleCount: 0,
+          isAIenabled: false,
+          AI: undefined,
+          watchDogCount: 0,
+          watchDogHandler: undefined,
         };
         for (let index = 0; index < 8; index++) {
           gameState.player1holder.push({ status: -1, highlight: "transparent" });
@@ -75,6 +87,8 @@ const app: Application = {
         gameState.spots = resetSpots();
 
         roomMap.set(roomId, gameState);
+        let room = roomMap.get(roomId);
+        if (room) room.watchDogHandler = setInterval(watchdog, 1000, roomId);
       }
 
       //check to make sure user not in room
@@ -188,11 +202,24 @@ const app: Application = {
 
       //update room config
       //updateing LobbyService
-      let numPlayers = room.players.length;
-      if (numPlayers == 0) {
+
+      console.log(room);
+
+      if (room.isAIenabled) {
+        console.log("calling destroy room");
+
         await hathoraSdk.roomV2.destroyRoom(roomId);
+        resolve();
+        return;
       } else {
-        await updateRoomConfig(roomId, numPlayers);
+        let numPlayers = room.players.length;
+        if (numPlayers == 0) {
+          await hathoraSdk.roomV2.destroyRoom(roomId);
+          resolve();
+          return;
+        } else {
+          await updateRoomConfig(roomId, numPlayers);
+        }
       }
 
       updateState(roomId);
@@ -210,12 +237,44 @@ const app: Application = {
   },
 
   onMessage: (roomId: RoomId, userId: UserId, data: ArrayBuffer): Promise<void> => {
-    return new Promise(resolve => {
+    return new Promise(async resolve => {
+      resetWatchdog(roomId);
       const msg = JSON.parse(decoder.decode(data));
-
       const room = roomMap.get(roomId);
       if (!room) return;
       switch (msg.type) {
+        case "makePlayer2AI":
+          room.isAIenabled = true;
+          room.AI = new AI({ personality: chance.pickone(arrayOfPersonalities), designator: "player2" }); //chance.pickone(arrayOfPersonalities)
+          room.players.push("AI");
+          //run ackPlayer2 code
+          room.player2state = true;
+          room.p2Tran = true;
+
+          //updateing LobbyService
+          await updateRoomConfig(roomId, 3);
+
+          server.broadcastMessage(
+            roomId,
+            encoder.encode(
+              JSON.stringify({
+                type: "event",
+                event: "hideWaiting",
+              })
+            )
+          );
+          updateState(roomId);
+          server.broadcastMessage(
+            roomId,
+            encoder.encode(
+              JSON.stringify({
+                type: "event",
+                event: "showConfirm",
+              })
+            )
+          );
+
+          break;
         case "backToWaiting":
           room.player1state = false;
           room.player2state = false;
@@ -263,6 +322,8 @@ const app: Application = {
           if (msg.msg == "Player 1") room.player1state = true;
           else if (msg.msg == "Player 2") room.player2state = true;
 
+          if (room.isAIenabled) room.player2state = true;
+
           if (room.player1state && room.player2state) {
             //reset game
 
@@ -289,12 +350,24 @@ const app: Application = {
                 })
               )
             );
-            sendToast(roomId, `It is ${room.turn}'s turn to start`, 1000);
-            showAvailableMoves(roomId);
-            setTimeout(() => {
-              room.turnstate = turnStates.selectToken;
-              updateState(roomId);
-            }, 2000);
+
+            //NOTE - AI trigger 3
+            if (room.isAIenabled && room.turn == "player2") {
+              let nextMoves = room.AI?.getNextMove({ spots: room.spots });
+              console.log("next moves: ", nextMoves);
+              for (const move of nextMoves!) {
+                await processAIMovesInUI(roomId, move);
+              }
+              //after all moves, end turn
+              processAiTransition(roomId);
+            } else {
+              sendToast(roomId, `It is ${room.turn}'s turn to start`, 1000);
+              showAvailableMoves(roomId);
+              setTimeout(() => {
+                room.turnstate = turnStates.selectToken;
+                updateState(roomId);
+              }, 2000);
+            }
           }
 
           break;
@@ -313,7 +386,20 @@ const app: Application = {
             )
           );
           sendToast(roomId, `It is ${room.turn}'s turn to start`, 1000);
-          showAvailableMoves(roomId);
+
+          //NOTE - AI trigger 1
+          if (room.isAIenabled && room.turn == "player2") {
+            let nextMoves = room.AI?.getNextMove({ spots: room.spots });
+            console.log("next moves: ", nextMoves);
+            for (const move of nextMoves!) {
+              await processAIMovesInUI(roomId, move);
+            }
+            //after all moves, transition
+            processAiTransition(roomId);
+          } else {
+            showAvailableMoves(roomId);
+          }
+
           break;
         case "endTurn2":
           console.log("receive end turn p2");
@@ -337,6 +423,9 @@ const app: Application = {
           } else {
             room.p2Tran = true;
           }
+
+          if (room.isAIenabled) room.p2Tran = true;
+
           //if both players haven't acknowledged
           if (!room.p1Tran || !room.p2Tran) return;
 
@@ -358,7 +447,7 @@ const app: Application = {
           } else {
             room.p2Tran = true;
           }
-
+          if (room.isAIenabled) room.p2Tran = true;
           //if both players haven't acknowledged
           if (!room.p1Tran || !room.p2Tran) return;
           //reset transition flags
@@ -460,17 +549,20 @@ const app: Application = {
                 // NEXT TURN
                 // ************************ */
                 console.log("CHANGING TURN");
-
-                room.turnstate = turnStates.nextTurn;
-                server.broadcastMessage(
-                  roomId,
-                  encoder.encode(
-                    JSON.stringify({
-                      type: "event",
-                      event: "nextTurn",
-                    })
-                  )
-                );
+                if (room.isAIenabled && room.turn == "player2") {
+                  endAiTurn(roomId);
+                } else {
+                  room.turnstate = turnStates.nextTurn;
+                  server.broadcastMessage(
+                    roomId,
+                    encoder.encode(
+                      JSON.stringify({
+                        type: "event",
+                        event: "nextTurn",
+                      })
+                    )
+                  );
+                }
               }
             }
           }
@@ -576,7 +668,17 @@ const app: Application = {
               );
               sendToast(roomId, `It is ${room.turn}'s turn to start`, 1000);
               showAvailableMoves(roomId);
-              setTimeout(() => {
+              setTimeout(async () => {
+                //NOTE - AI trigger 2
+                if (room.isAIenabled && room.turn == "player2") {
+                  let nextMoves = room.AI?.getNextMove({ spots: room.spots });
+                  console.log("next moves: ", nextMoves);
+                  for (const move of nextMoves!) {
+                    await processAIMovesInUI(roomId, move);
+                  }
+                  //after all moves, end turn
+                  processAiTransition(roomId);
+                }
                 room.turnstate = turnStates.selectToken;
                 updateState(roomId);
               }, 2000);
@@ -659,6 +761,7 @@ const updateState = (roomId: string) => {
         p2State: room.player2state,
         turn: room.turn,
         victoryState: room.gameVictoryState,
+        timeOutCount: room.watchDogCount,
       })
     )
   );
@@ -975,4 +1078,190 @@ const lastPiecePlayed = (roomId: string): boolean => {
 const updateRoomConfig = async (roomId: string, data: number) => {
   const roomConfig = { status: data };
   return await hathoraSdk.roomV2.updateRoomConfig({ roomConfig: JSON.stringify(roomConfig) }, roomId);
+};
+
+const processAIMovesInUI = async (
+  roomID: string,
+  move: { player: "player2" | "player1"; token?: number | undefined; index: number }
+) => {
+  const room = roomMap.get(roomID);
+  if (!room) return;
+
+  //update spots with new data
+  console.log("move: ", move);
+
+  let tokenIndex;
+  //highlight marble to be moved
+  if (move.token && move.player == "player1") {
+    console.log("COUNTER MOVE!!!");
+    room.spots[move.token].highlight = "whitesmoke";
+    tokenIndex = move.index;
+  } else {
+    for (let index = 0; index < room.player2holder.length; index++) {
+      if (room.player2holder[index].status == -1) {
+        room.player2holder[index].highlight = "whitesmoke";
+        tokenIndex = index;
+        break;
+      }
+    }
+  }
+  updateState(roomID);
+
+  //wait a second
+  await waitSomeTime(2000);
+  console.log("token index: ", tokenIndex);
+
+  resetHighlights(roomID);
+  if (move.token && move.player == "player1") {
+    //move.token is current spot index
+    //move.index is next spot index
+
+    //find index of token at move.index
+    let playerIndex = room.player1holder.findIndex(plr => plr.status == move.token);
+    console.log(`COUNTER DATA -> token: ${move.token}, index: ${move.index}, playerindex: ${playerIndex}`);
+
+    //update room.spots with new data
+    room.spots[move.index].player = "player1";
+    room.spots[move.index].status = true;
+    room.spots[move.index].index = room.spots[move.token].index;
+
+    room.spots[move.token].player = "";
+    room.spots[move.token].status = false;
+    room.spots[move.token].index = null;
+
+    sendToast(roomID, "AI Player Counter", 1000);
+
+    if (playerIndex > -1) {
+      server.broadcastMessage(
+        roomID,
+        encoder.encode(
+          JSON.stringify({
+            type: "moveToken",
+            player: "player1",
+            token: playerIndex,
+            spot: move.index,
+          })
+        )
+      );
+    }
+  } else {
+    room.spots[move.index].status = true;
+    room.spots[move.index].player = "player2";
+    room.spots[move.index].index = tokenIndex;
+    room.player2holder[tokenIndex as number].status = move.index;
+
+    sendToast(roomID, "AI Player Moving", 1000);
+
+    server.broadcastMessage(
+      roomID,
+      encoder.encode(
+        JSON.stringify({
+          type: "moveToken",
+          player: "player2",
+          token: tokenIndex,
+          spot: move.index,
+        })
+      )
+    );
+  }
+  resetHighlights(roomID);
+  updateState(roomID);
+  await waitSomeTime(1000);
+};
+
+const waitSomeTime = async (ms: number): Promise<void> => {
+  return new Promise(r => setTimeout(r, ms));
+};
+
+const processAiTransition = async (roomID: string) => {
+  const room = roomMap.get(roomID);
+  if (!room) return;
+  //wait a second
+  await waitSomeTime(1000);
+
+  console.log("starting transition");
+  room.p1Tran = room.p2Tran = false;
+  sendToast(roomID, "Transitioning", 1500);
+  room.turnstate = turnStates.transition;
+  transitionTokens(roomID);
+
+  await waitSomeTime(1000);
+};
+
+const endAiTurn = async (roomID: string) => {
+  const room = roomMap.get(roomID);
+  if (!room) return;
+  room.turn = "player1";
+  room.turnstate = turnStates.selectToken;
+  showAvailableMoves(roomID);
+  server.broadcastMessage(
+    roomID,
+    encoder.encode(
+      JSON.stringify({
+        type: "event",
+        event: "newTurn",
+      })
+    )
+  );
+  sendToast(roomID, `It is ${room.turn}'s turn to start`, 1000);
+};
+
+const watchdog = async (roomId: string) => {
+  const room = roomMap.get(roomId);
+  if (!room) return;
+  room.watchDogCount++;
+
+  //4 minutes of inactivity
+
+  if (room.watchDogCount >= TIMER_WARNING && room.watchDogCount < TIMER_LIMIT) {
+    server.broadcastMessage(
+      roomId,
+      encoder.encode(
+        JSON.stringify({
+          type: "event",
+          event: "showTimerWarning",
+        })
+      )
+    );
+  } else if (room.watchDogCount >= TIMER_LIMIT) {
+    console.log("closing things down");
+
+    //disable interval call
+    clearInterval(room.watchDogHandler);
+
+    sendToast(roomId, "Closing Inactive Game", 1000);
+    await waitSomeTime(1000);
+    server.broadcastMessage(
+      roomId,
+      encoder.encode(
+        JSON.stringify({
+          type: "event",
+          event: "InactivityWatchdog",
+        })
+      )
+    );
+    await waitSomeTime(1000);
+    await hathoraSdk.roomV2.destroyRoom(roomId);
+  }
+
+  updateState(roomId);
+};
+
+const resetWatchdog = (roomId: string) => {
+  const room = roomMap.get(roomId);
+  if (!room) return;
+  console.log(`resetting watchdog -> time was at ${room?.watchDogCount} seconds`);
+
+  if (room.watchDogCount >= TIMER_WARNING) {
+    server.broadcastMessage(
+      roomId,
+      encoder.encode(
+        JSON.stringify({
+          type: "event",
+          event: "clearWatchdogWarning",
+        })
+      )
+    );
+  }
+  room.watchDogCount = 0;
 };
