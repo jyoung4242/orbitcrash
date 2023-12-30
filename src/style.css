@@ -483,3 +483,19 @@ player-left {
   width: 25%;
   transition: opacity 0.4s linear;
 }
+
+inactivity-timer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  font-size: xx-small;
+  color: red;
+}
+
+version-text {
+  position: fixed;
+  bottom: 2px;
+  right: 2px;
+  font-size: xx-small;
+  color: whitesmoke;
+}

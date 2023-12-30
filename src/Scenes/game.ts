@@ -142,6 +142,12 @@ export class Game extends Scene {
   showReplay = false;
   showPlayerLeft = false;
   isEndTurn = false;
+  isTimerWarningShowing = false;
+  timerCount = 0;
+
+  get timeLeft() {
+    return 30 - this.timerCount;
+  }
 
   get showEndTurn() {
     const me = window.globalstate.turn == "player1" ? 0 : 1;
@@ -199,6 +205,12 @@ export class Game extends Scene {
   };
   setPlayer2Ready = () => {
     window.myHathoraClient.sendMessage("readyAck2", "");
+  };
+
+  setPlayer2AI = () => {
+    console.log("clicked ai");
+
+    window.myHathoraClient.sendMessage("makePlayer2AI", "");
   };
 
   leaveGame = async () => {
@@ -286,6 +298,8 @@ export class Game extends Scene {
         // bind token to mouse
 
         //test for whitesmoke
+        console.log(m.spot);
+
         if (m.spot.highlight != "whitesmoke") return;
 
         let playerDes = m.spot.player;
@@ -379,9 +393,14 @@ export class Game extends Scene {
       <div \${spot<=*spotLocations} \${click@=>boardclick} class="holderspot" style="position: fixed; top:0; left:0; transform: translate(\${spot.position.x}px, \${spot.position.y}px); border-radius: 50%; width: 15px; height: 15px; box-shadow: 0px 0px 3px 3px \${spot.highlight};"></div>
     </board-spots>
     <toast-layer \${===showToast}>\${toastContent}</toast-layer>
+    <inactivity-timer \${===isTimerWarningShowing}>
+        Inactivity Warning
+        Time until game cancellation: \${timeLeft} 
+    </inactivity-timer>
     <waiting-modal \${===showWaiting}>
       <div class="waiting_primary">WAITING ON PLAYER TO JOIN</div>
       <div class="waiting_secondary">PLEASE STANDBY....</div>
+      <div class="confirm_ready" \${click@=>setPlayer2AI}>Single Player?</div>
     </waiting-modal>
     <confirm-modal \${===showConfirm}>
       <div class="confirm_title">READY TO START</div>
@@ -448,8 +467,12 @@ export class Game extends Scene {
 
     this.UISignal.listen(this.uieventhandler);
 
-    Assets.initialize({ src: "./src/Assets/" });
-    await Assets.load(["gameboard.png", "tokenHolder.png"]);
+    console.log("asset check: ", Assets.loaded);
+
+    if (Assets.loaded == 0) {
+      Assets.initialize({ src: "./src/Assets/" });
+      await Assets.load(["gameboard.png", "tokenHolder.png"]);
+    }
 
     //add UI template to Viewport Layer
     SceneManager.viewport.addLayers([{ name: "game", parallax: 0 }, { name: "hud" }]);
@@ -493,9 +516,34 @@ export class Game extends Scene {
     Engine.create({ fps: 60, started: true, callback: this.update });
   };
 
-  uieventhandler = (signalDetails: CustomEvent) => {
+  public exit = (): Promise<void> => {
+    return new Promise(() => {
+      this.entities = [];
+      document.removeEventListener("keypress", e => {
+        if (this.isEndTurn && e.key == "Enter") {
+          this.endTurn();
+        }
+      });
+      this.UISignal.stopListening();
+    });
+  };
+
+  uieventhandler = async (signalDetails: CustomEvent) => {
     console.log("received ui event", signalDetails.detail.params);
     switch (signalDetails.detail.params[0]) {
+      case "showTimerWarning":
+        this.isTimerWarningShowing = true;
+        break;
+      case "InactivityWatchdog":
+        this.isTimerWarningShowing = false;
+        this.resetGame();
+        await window.myHathoraClient.leaveRoom();
+        window.sceneMgr.set("lobby");
+
+        break;
+      case "clearWatchdogWarning":
+        this.isTimerWarningShowing = false;
+        break;
       case "playerLeft":
         this.showPlayerLeft = true;
         this.showBlur = true;
@@ -642,19 +690,38 @@ export class Game extends Scene {
           this.showToast = false;
         }, duration);
         break;
+      case "moveToken":
+        let movedPlayer = signalDetails.detail.params[1];
+        let tokenIndex = signalDetails.detail.params[2];
+        let newSpot = signalDetails.detail.params[3];
+        console.log("moving token: ", movedPlayer, tokenIndex, newSpot);
+
+        //find entity
+        let movedPlayerEntity = this.entities.find((ent: any) => ent.index == tokenIndex && ent.playerdesignator == movedPlayer);
+
+        //find spot location
+        let newSpotVector = this.spotLocations[newSpot];
+
+        //update enitty
+        movedPlayerEntity.css = " moving";
+
+        movedPlayerEntity.position.x = newSpotVector.position.x;
+        movedPlayerEntity.position.y = newSpotVector.position.y;
+        setTimeout(() => {
+          //removing moving class
+          movedPlayerEntity.css = "";
+        }, 600);
+
+        break;
       case "stateupdate":
-        window.globalstate.p1Holder.forEach((val, index) => (this.p1Holderspots[index].highlight = val.highlight));
-        window.globalstate.p2Holder.forEach((val, index) => (this.p2Holderspots[index].highlight = val.highlight));
-        window.globalstate.spots.forEach((val, index) => {
-          this.spotLocations[index].highlight = val.highlight;
-          this.spotLocations[index].player = val.player;
-          this.spotLocations[index].playerIndex = val.index;
-        });
+        this.stateUpdate();
         break;
     }
   };
 
   stateUpdate() {
+    console.log("in state update");
+
     window.globalstate.p1Holder.forEach((val, index) => (this.p1Holderspots[index].highlight = val.highlight));
     window.globalstate.p2Holder.forEach((val, index) => (this.p2Holderspots[index].highlight = val.highlight));
     window.globalstate.spots.forEach((val, index) => {
@@ -662,6 +729,9 @@ export class Game extends Scene {
       this.spotLocations[index].player = val.player;
       this.spotLocations[index].playerIndex = val.index;
     });
+    console.log(window.globalstate);
+
+    this.timerCount = window.globalstate.timeoutcount;
   }
 
   //GameLoop update method

@@ -4,7 +4,7 @@ export type AiPersonality = "aggressive" | "defensive" | "balance" | "random";
 export type AiMoveType = "block" | "attack" | "counter";
 export type spotData = {
   index: number;
-  player: "player1" | "player2" | null;
+  player: "player1" | "player2" | null | "";
 };
 export type aiPlayerDesignator = "player1" | "player2";
 
@@ -55,8 +55,7 @@ export class AI {
 
   getNextMove(layout: iBoardLayout): Array<{ player: "player1" | "player2"; token?: number; index: number }> {
     //guard for no moremoves...
-
-    const fullcheck = layout.spots.some(spot => spot.player == null);
+    const fullcheck = layout.spots.some(spot => spot.index == null);
     if (!fullcheck) throw new Error("NO MORE MOVES TO MAKE");
 
     switch (this.personality) {
@@ -125,15 +124,18 @@ export class AI {
     let resultArray: Array<{ score: number; winningConditionIndex: number }> = [];
 
     let viableWinningConditions: number[] = [];
+    console.log("in grading-> layout: ", layout);
+
     this.winningConditions.forEach((wcond, windex) => {
       let indexsThatAreEmpty = 0;
       for (const winIndex of wcond) {
-        if (layout.spots[winIndex].player == null) {
+        if (layout.spots[winIndex].player == "") {
           indexsThatAreEmpty++;
         }
       }
       if (indexsThatAreEmpty > 0) viableWinningConditions.push(windex);
     });
+    console.log("in grading:->viable conditions ", viableWinningConditions);
 
     //loop through all winning conditions and assign a score 0-2 (2 is highest)
     let score = 0;
@@ -172,7 +174,7 @@ export class AI {
     this.winningConditions.forEach((wcond, windex) => {
       let indexsThatAreEmpty = 0;
       for (const winIndex of wcond) {
-        if (layout.spots[winIndex].player == null) {
+        if (layout.spots[winIndex].player == "") {
           //test here for enemyplayer having a move
           indexsThatAreEmpty++;
         }
@@ -248,6 +250,7 @@ export class AI {
     //filter highest value
     //const highestValue = Math.max(...scores);
     const highestValue = getHighestScore(scores);
+    console.log("random high score", scores);
 
     //use reducer to create array of indices of that match highest value
     const sortedScores: number[] = scores.reduce((indices: number[], value, index) => {
@@ -256,6 +259,8 @@ export class AI {
       }
       return indices;
     }, []);
+
+    console.log("sorted scores: ", sortedScores);
 
     //pick one of the indices
     return this.chance.pickone(sortedScores);
@@ -283,13 +288,23 @@ export class AI {
     //get list of ai positions
     //get list of open spots
 
+    console.log("I am getting to aggressive play");
+
     let enemyPlayerDesignator: aiPlayerDesignator;
     this.playerDesignator == "player1" ? (enemyPlayerDesignator = "player2") : (enemyPlayerDesignator = "player1");
     let selectedIndex; //returned results
 
-    const enemyPositions = layout.spots.filter(spot => spot.player != this.playerDesignator && spot.player != null);
+    const enemyPositions = layout.spots.filter(spot => spot.player != this.playerDesignator && spot.index != null);
     const aiPositions = layout.spots.filter(spot => spot.player == this.playerDesignator);
-    const openPositions = layout.spots.filter(spot => spot.player == null);
+    const openPositions = layout.spots
+      .map((spot, sindex) => {
+        return {
+          player: spot.player,
+          index: spot.index,
+          mappedIndex: sindex,
+        };
+      })
+      .filter(spot => spot.index == null);
 
     //define aggressive play as high probability of just playing to win
     //not paying too much attention to opponent's position
@@ -297,14 +312,25 @@ export class AI {
 
     //if board isn't very full, randomly select available spots
     //empty'ish board
-    if (enemyPositions.length <= 2 && aiPositions.length <= 2) {
-      //choose anywhere
+    console.log("openpositions: ", openPositions);
 
+    if (enemyPositions.length <= 1 && aiPositions.length <= 1) {
+      //choose anywhere
       selectedIndex = this.chance.pickone(openPositions);
-      return [{ player: this.playerDesignator, index: selectedIndex.index }];
+      return [{ player: this.playerDesignator, index: selectedIndex.mappedIndex }];
     }
 
-    let roll = this.chance.integer({ min: 0, max: 100 });
+    let roll: number;
+    //can't block if no enemies on board
+    let noBlock: boolean = layout.spots.some(spot => spot.player == enemyPlayerDesignator);
+
+    if (!noBlock) {
+      roll = this.chance.integer({ min: 0, max: 40 });
+    } else {
+      roll = this.chance.integer({ min: 0, max: 100 });
+    }
+    console.log("roll: ", roll);
+
     if (roll <= 40) return [this.attackPlay(layout)]; // primary 40% chance of just attacking
     else if (roll <= 70) {
       let cntrPlay = this.counterPlay(layout);
@@ -332,21 +358,37 @@ export class AI {
     this.playerDesignator == "player1" ? (enemyPlayerDesignator = "player2") : (enemyPlayerDesignator = "player1");
     let selectedIndex; //returned results
 
-    const enemyPositions = layout.spots.filter(spot => spot.player != this.playerDesignator);
+    const enemyPositions = layout.spots.filter(spot => spot.player != this.playerDesignator && spot.index != null);
     const aiPositions = layout.spots.filter(spot => spot.player == this.playerDesignator);
-    const openPositions = layout.spots.filter(spot => spot.player == null);
+    const openPositions = layout.spots
+      .map((spot, sindex) => {
+        return {
+          player: spot.player,
+          index: spot.index,
+          mappedIndex: sindex,
+        };
+      })
+      .filter(spot => spot.index == null);
 
     //define balanced play as equal probability of playing to win and not losing
 
     //if board isn't very full, randomly select available spots
     //empty'ish board
-    if (enemyPositions.length <= 2 && aiPositions.length <= 2) {
+    if (enemyPositions.length <= 1 && aiPositions.length <= 1) {
       //choose anywhere
       selectedIndex = this.chance.pickone(openPositions);
-      return [{ player: this.playerDesignator, index: selectedIndex.index }];
+      return [{ player: this.playerDesignator, index: selectedIndex.mappedIndex }];
     }
 
-    let roll = this.chance.integer({ min: 0, max: 100 });
+    let roll: number;
+    //can't block if no enemies on board
+    let noBlock: boolean = layout.spots.some(spot => spot.player == enemyPlayerDesignator);
+
+    if (!noBlock) {
+      roll = this.chance.integer({ min: 0, max: 25 });
+    } else {
+      roll = this.chance.integer({ min: 0, max: 100 });
+    }
 
     if (roll <= 25) return [this.attackPlay(layout)]; // primary 40% chance of just attacking
     else if (roll <= 50) {
@@ -375,21 +417,37 @@ export class AI {
     this.playerDesignator == "player1" ? (enemyPlayerDesignator = "player2") : (enemyPlayerDesignator = "player1");
     let selectedIndex; //returned results
 
-    const enemyPositions = layout.spots.filter(spot => spot.player != this.playerDesignator);
+    const enemyPositions = layout.spots.filter(spot => spot.player != this.playerDesignator && spot.index != null);
     const aiPositions = layout.spots.filter(spot => spot.player == this.playerDesignator);
-    const openPositions = layout.spots.filter(spot => spot.player == null);
+    const openPositions = layout.spots
+      .map((spot, sindex) => {
+        return {
+          player: spot.player,
+          index: spot.index,
+          mappedIndex: sindex,
+        };
+      })
+      .filter(spot => spot.index == null);
 
     //define balanced play as equal probability of playing to win and not losing
 
     //if board isn't very full, randomly select available spots
     //empty'ish board
-    if (enemyPositions.length <= 2 && aiPositions.length <= 2) {
+    if (enemyPositions.length <= 1 && aiPositions.length <= 1) {
       //choose anywhere
       selectedIndex = this.chance.pickone(openPositions);
-      return [{ player: this.playerDesignator, index: selectedIndex.index }];
+      return [{ player: this.playerDesignator, index: selectedIndex.mappedIndex }];
     }
 
-    let roll = this.chance.integer({ min: 0, max: 100 });
+    let roll: number;
+    //can't block if no enemies on board
+    let noBlock: boolean = layout.spots.some(spot => spot.player == enemyPlayerDesignator);
+
+    if (!noBlock) {
+      roll = this.chance.integer({ min: 0, max: 15 });
+    } else {
+      roll = this.chance.integer({ min: 0, max: 100 });
+    }
 
     if (roll <= 15) return [this.attackPlay(layout)]; // primary 40% chance of just attacking
     else if (roll <= 30) {
@@ -426,11 +484,14 @@ export class AI {
 
     //score each winning position
     let gradeArray = this.gradeWinningCounterConditions(nextLayout);
+    console.log("counter play -> graded array: ", gradeArray);
+
     //randomly select the least favorable winning scenario of equally weighted methods
     let winningIndexSelected: number = this.randomlySelectLowWinningScore(gradeArray);
-
+    console.log("counter play -> winningIndex: ", winningIndexSelected);
     //using this winning condition selected
     let currentWinningCondition = this.winningConditions[winningIndexSelected];
+    console.log("counter play -> winning conditions: ", currentWinningCondition);
 
     //figure out which play makes sense next
     //1) pick avaialble spot that has largest risk of enemy winning
@@ -442,26 +503,32 @@ export class AI {
 
     for (const winningspot of currentWinningCondition) {
       // change layout to newlayout
+      console.log("counter play -> winning spot: ", winningspot);
+
       if (layout.spots[winningspot].player == enemyPlayerDesignator) {
         //found enemy, check neighbors
         presetTokenIndex = winningspot;
-
+        console.log("counter play -> enemy spot: ", presetTokenIndex);
         const listOfNeighborIndices = getNeighborIndices(presetTokenIndex);
-
+        console.log("counter play -> neighbors ", listOfNeighborIndices);
         let arryOfNeighbors = [];
         for (const nindx of listOfNeighborIndices) {
-          if (layout.spots[nindx].player == null) {
-            arryOfNeighbors.push(layout.spots[nindx]);
+          if (layout.spots[nindx].player == "") {
+            arryOfNeighbors.push(nindx);
           }
         }
-
+        console.log("counter play -> neighbors ", listOfNeighborIndices);
+        console.log("counter play -> array of empty neighbors ", arryOfNeighbors);
         if (arryOfNeighbors.length) {
-          playedPositionIndex = this.chance.pickone(arryOfNeighbors).index;
+          playedPositionIndex = this.chance.pickone(arryOfNeighbors);
+          console.log("selected index", playedPositionIndex);
         }
 
         if (playedPositionIndex != undefined) break;
       }
     }
+
+    console.log("counter check: ", playedPositionIndex);
 
     if (playedPositionIndex == undefined) return;
 
@@ -484,23 +551,25 @@ export class AI {
 
     //score each winning position
     let gradeArray = this.gradeWinningDefensiveCondition(nextLayout);
-
+    console.log("block play -> graded array: ", gradeArray);
     //randomly select the least favorable winning scenario of equally weighted methods
     let winningIndexSelected: number = this.randomlySelectLowWinningScore(gradeArray);
-
+    console.log("block play -> winningIndexSelected: ", winningIndexSelected);
     //using this winning condition selected
     let currentWinningCondition = this.winningConditions[winningIndexSelected];
-
+    console.log("block play -> currentWinningCondition: ", currentWinningCondition);
     //figure out which play makes sense next
     //1) pick avaialble spot that has largest risk of enemy winning
     //iterate over winning condition and 'pick' first available spot
     let playedPositionIndex: any = undefined;
     for (const winningspot of currentWinningCondition) {
       //find first available spot to place your token
-      if (nextLayout.spots[winningspot].player == null) {
+      console.log("block play -> looping -> winningspot: ", winningspot);
+      console.log("block play -> nextLayout.spot: ", nextLayout.spots[winningspot]);
+      if (nextLayout.spots[winningspot].player == "") {
         //first available spot
 
-        playedPositionIndex = layout.spots[winningspot].index;
+        playedPositionIndex = nextLayout.spots[winningspot].index;
       }
     }
     //2) work backwards from preview, and set spot value
@@ -531,11 +600,16 @@ export class AI {
     //score each winning position
     listOfViableWinningConditionsAndGrades = this.gradeWinningAttackConditions(nextLayout);
 
+    console.log("list of winningCondistions", listOfViableWinningConditionsAndGrades);
+
     let winningIndexSelected: number = this.randomlySelectHighWinningScore(listOfViableWinningConditionsAndGrades);
     let currentWinningCondition;
 
+    console.log("in attack-> selected winning index", winningIndexSelected);
+
     //using this winning condition selected
     currentWinningCondition = this.winningConditions[winningIndexSelected];
+    console.log("in attack-> selected winning condition", currentWinningCondition);
 
     //figure out which play makes sense next
     //1) pick avaialble spot that improves winning
@@ -543,7 +617,7 @@ export class AI {
     let playedPositionIndex: number | null = null;
 
     for (const winningspot of currentWinningCondition) {
-      if (nextLayout.spots[winningspot].player == null) {
+      if (nextLayout.spots[winningspot].player == "") {
         //first available spot
         playedPositionIndex = nextLayout.spots[winningspot].index;
 
@@ -552,6 +626,8 @@ export class AI {
     }
     //2) work backwards from preview, and set spot value
 
+    console.log("future index: ", playedPositionIndex);
+
     let reverseLookupIndex = 0;
     for (const reverseIndex of nextSpotLookup) {
       if (reverseIndex == playedPositionIndex) {
@@ -559,6 +635,8 @@ export class AI {
       }
       reverseLookupIndex++;
     }
+
+    console.log("reverse index: ", reverseLookupIndex);
 
     if (reverseLookupIndex == 16) throw Error("invalid position selected");
     return { player: this.playerDesignator, index: reverseLookupIndex };
@@ -602,9 +680,11 @@ function getNeighborIndices(index: number): number[] {
 }
 
 function getHighestScore(myList: Array<{ score: number; winningConditionIndex: number }>) {
+  if (myList.length == 0) return [];
   return myList.reduce((prev, current) => (prev.score > current.score ? prev : current)).score;
 }
 
 function getLowestScore(myList: Array<{ score: number; winningConditionIndex: number }>) {
+  if (myList.length == 0) return [];
   return myList.reduce((prev, current) => (prev.score < current.score ? prev : current)).score;
 }

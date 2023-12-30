@@ -3,6 +3,8 @@ import { State } from "@peasy-lib/peasy-states";
 import { Scene, SceneManager } from "../../_SqueletoECS/Scene";
 import { UI } from "@peasy-lib/peasy-ui";
 
+const VERSION = "0.0.3";
+
 const login = async (): Promise<boolean> => {
   let user = await window.myHathoraClient.login();
 
@@ -17,6 +19,7 @@ const login = async (): Promise<boolean> => {
 };
 
 export class Login extends Scene {
+  version = "";
   loginEvent = async () => {
     let loginResult = await login();
     if (loginResult) {
@@ -62,11 +65,13 @@ export class Login extends Scene {
         }
       </style>
       <scene-layer>
+      <version-text>Version \${version }</version-text>
        <div class="title">Orbit Connect</div>
        <div class="loginButton" \${click@=>loginEvent}>Login to Server</div>
       </scene-layer>
   `;
   public enter = async (previous: State | null, ...params: any[]): Promise<void> => {
+    this.version = VERSION;
     //load HUD
     let layers = SceneManager.viewport.layers;
     let hud = layers.find(lyr => lyr.name == "hud");

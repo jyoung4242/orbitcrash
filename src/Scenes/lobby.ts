@@ -155,6 +155,9 @@ export class Lobby extends Scene {
           case 2:
             statusString = "full";
             break;
+          case 3:
+            statusString = "AI";
+            break;
         }
         match.status = statusString;
       }

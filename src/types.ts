@@ -34,4 +34,5 @@ export enum LobbyStatus {
   empty = 0,
   waiting = 1,
   full = 2,
+  AI = 3,
 }
