@@ -282,7 +282,7 @@ export class Login extends Scene {
           <label class="loginNickNameLabel" title="NICKNAME">Nickname (optional)</label>
           <input \${==>nickname} type='text' class="loginNickName" placeholder="anonymous" title="NICKNAME"\${keydown@=>checkEnter}/>
         </div>
-       <button class="loginButton" title="LOGIN" \${click@=>loginEvent}>Login to Server</button>
+       <button class="loginButton" title="LOGIN" \${click@=>loginEvent}>LOGIN</button>
        <active-session \${===showActiveSession} class="sessiontext">
           \${activeSessionString}
           <button class="resetButton" \${click@=>resetSession}>Reset Session</button>

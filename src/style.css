@@ -60,10 +60,21 @@ body {
   grid-template-rows: repeat(12, 1fr);
 }
 
+.lobbytitle {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  padding-bottom: 5px;
+}
+
 .titleblock {
-  font-size: 1.5em;
+  font-size: 1.2em;
+  font-family: hero;
   border-bottom: 1px solid whitesmoke;
-  padding: 3px;
+  padding-top: 4px;
+  padding-left: 5px;
+  padding-bottom: 3px;
   grid-column-start: 1;
   grid-column-end: span 12;
   grid-row-start: 1;
@@ -76,10 +87,12 @@ body {
 
 .userdata {
   display: flex;
+  font-family: subtext;
   justify-content: space-evenly;
   align-items: center;
   font-size: 0.4vw;
   gap: 10px;
+  height: 100%;
 }
 
 .matchesblock {
@@ -92,28 +105,39 @@ body {
 }
 
 .matchesheader {
+  font-family: subtext;
   border-bottom: 1px solid whitesmoke;
-  padding: 3px;
-  font-size: xx-small;
+  padding: 5px;
+  font-size: 0.3vw;
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  gap: 24px;
 }
 
 .matchestitle {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 3px;
+  font-family: hero;
   border-bottom: 1px solid whitesmoke;
   width: 100%;
-  padding-top: 3px;
-  padding-left: 3px;
+  padding-top: 2px;
+  padding-left: 4px;
+  padding-bottom: 5px;
 }
 
 .openMatch {
   padding: 2px;
   display: flex;
   width: calc(100% - 4px);
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  gap: 16px;
   border-bottom: 1px solid whitesmoke;
+  font-family: subtext;
+  text-transform: uppercase;
 }
 
 .openMatches {
@@ -126,31 +150,34 @@ body {
 }
 
 .matches_type {
-  font-size: 0.3vw;
+  font-size: 0.25vw;
   color: whitesmoke;
 }
 
 .matches_status {
-  font-size: 0.3vw;
+  font-size: 0.25vw;
   color: whitesmoke;
 }
 
 .matches_rid {
-  font-size: 0.3vw;
+  font-size: 0.25vw;
   color: whitesmoke;
   user-select: all;
 }
 
 .matches_creator {
-  font-size: 0.3vw;
+  font-size: 0.25vw;
   color: whitesmoke;
 }
 .matches_deets {
-  font-size: 0.3vw;
+  font-size: 0.25vw;
   color: whitesmoke;
 }
 .matches_join_button {
-  font-size: 0.3vw;
+  background-color: transparent;
+  color: whitesmoke;
+  font-size: 0.25vw;
+  font-family: subtext;
   border: 1px solid whitesmoke;
   border-radius: 5000px;
   padding: 3px;
@@ -173,9 +200,58 @@ body {
   border-bottom: 1px solid whitesmoke;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: space-around;
   align-items: center;
+}
+
+.create_title {
+  font-family: hero;
+  font-size: x-small;
+  text-align: center;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+}
+
+.servers {
+  width: 75%;
+}
+
+.serverdropdown {
+  color: whitesmoke;
+  background-color: black;
+  font-family: subtext;
+  font-size: x-small;
+  width: 100%;
+  text-align: center;
+  border-radius: 500000px;
+  border: 1px solid whitesmoke;
   padding: 3px;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.serverdropdown:hover {
+  background-color: whitesmoke;
+  color: black;
+  cursor: pointer;
+}
+
+.serverdropdownOptions {
+  color: whitesmoke;
+  background-color: black;
+  font-family: subtext;
+  font-size: large;
+  width: 100%;
+  text-align: center;
+  border-radius: 500000px;
+  border: 1px solid whitesmoke;
+  padding: 3px;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 .buttoncontainer {
@@ -184,23 +260,34 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 3px;
+  gap: 8px;
   padding-bottom: 5px;
 }
 
 .public {
-  width: 100%;
+  background-color: transparent;
+  color: whitesmoke;
+  width: 90%;
   display: flex;
   justify-content: center;
   align-items: center;
+  font-family: subtext;
   font-size: small;
 }
 .private {
-  width: 100%;
+  background-color: transparent;
+  color: whitesmoke;
+  width: 90%;
   display: flex;
   justify-content: center;
   align-items: center;
   font-size: small;
+  font-family: subtext;
+  gap: 3px;
+}
+
+.private:hover .infoIcon {
+  background-image: url("./Assets/infoblack.svg");
 }
 
 .joinblock {
@@ -208,13 +295,24 @@ body {
   grid-column-end: span 12;
   grid-row-start: 10;
   grid-row-end: span 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  align-content: center;
+  gap: 7px;
 }
 
 .lobby_join_title {
-  padding-top: 2px;
+  font-family: hero;
+  font-size: x-small;
+  padding-top: 7px;
   padding-bottom: 1px;
   width: 100%;
   text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
 }
 
 .matchInput_container {
@@ -226,12 +324,16 @@ body {
 }
 
 .matchInput {
-  width: 60%;
+  width: 50%;
   font-size: x-small;
+  font-family: subtext;
 }
 
 .matchJoinButton {
-  width: 20%;
+  background-color: transparent;
+  color: whitesmoke;
+  font-family: subtext;
+  width: 25%;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -294,6 +396,19 @@ waiting-modal {
 
 .waiting_secondary {
   font-size: 0.5vw;
+}
+
+.infoIcon {
+  width: 5px;
+  aspect-ratio: 1/1;
+  background-image: url("./Assets/info.svg");
+  background-size: contain;
+  background-repeat: no-repeat;
+  transition: transform 0.35s;
+}
+
+.infoIcon:hover {
+  transform: scale(1.25);
 }
 
 confirm-modal {
