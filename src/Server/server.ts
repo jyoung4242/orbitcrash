@@ -4,6 +4,7 @@ import { gameStates, gameVictoryStates, turnStates } from "../types.ts";
 import { Chance } from "chance";
 import { HathoraCloud } from "@hathora/cloud-sdk-typescript";
 import { AI, AiPersonality, aiPlayerDesignator } from "./serverAI.ts";
+import { AppConfig, AuthConfiguration } from "@hathora/hathora-cloud-sdk";
 
 dotenv.config();
 
@@ -17,6 +18,19 @@ const hathoraSdk = new HathoraCloud({
   appId: process.env.HATHORA_APP_ID!,
   security: { hathoraDevToken: process.env.DEVELOPER_TOKEN! },
 });
+
+console.log("Updating App: ***********************************************************");
+let authConfig: AuthConfiguration = {
+  anonymous: {},
+  nickname: {},
+};
+
+let appconfig: AppConfig = {
+  appName: "orbitconnect",
+  authConfiguration: authConfig,
+};
+
+hathoraSdk.appV1.updateApp(appconfig);
 
 console.log("appid: ", process.env.HATHORA_APP_ID);
 

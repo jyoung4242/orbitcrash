@@ -1,6 +1,12 @@
 import { HathoraClient, HathoraConnection, ConnectionDetails } from "@hathora/client-sdk";
 import { HathoraCloud } from "@hathora/cloud-sdk-typescript";
-import { LobbyVisibility, Region } from "@hathora/cloud-sdk-typescript/dist/sdk/models/shared";
+import {
+  AppConfig,
+  AuthConfiguration,
+  LobbyVisibility,
+  LoginNicknameRequest,
+  Region,
+} from "@hathora/cloud-sdk-typescript/dist/sdk/models/shared";
 import { GetConnectionInfoResponse } from "@hathora/cloud-sdk-typescript/dist/sdk/models/operations";
 import { log } from "console";
 import { LobbyStatus } from "../src/types";
@@ -29,6 +35,7 @@ export type UserData = object & {
 
 export enum AuthenticationType {
   anonymous = "anon",
+  nickname = "nickname",
 }
 
 export class MultiPlayerInterface {
@@ -83,10 +90,22 @@ export class MultiPlayerInterface {
     return this.matchScope;
   }
 
-  async login() {
+  async login(nickname?: string) {
+    console.log(nickname);
+
     this.token = sessionStorage.getItem("token");
     if (!this.token) {
-      let loginResponse = await this.authClient.loginAnonymous(this.appID);
+      let loginResponse;
+      if (nickname == undefined) loginResponse = await this.authClient.loginAnonymous(this.appID);
+      else {
+        console.log("nickname login", nickname);
+
+        let nicknamerequest: LoginNicknameRequest = {
+          nickname,
+        };
+        loginResponse = await this.authClient.loginNickname(nicknamerequest, this.appID);
+      }
+
       if (loginResponse.loginResponse?.token) this.token = loginResponse.loginResponse?.token;
       sessionStorage.setItem("token", this.token as string);
       if (this.token) this.userdata = HathoraClient.getUserFromToken(this.token);
@@ -98,6 +117,7 @@ export class MultiPlayerInterface {
       token: this.token as string,
       userdata: this.userdata,
     };
+    console.log(this.userdata);
 
     console.log("User Login: ***********************************************************************");
     console.log("User Token: ", this.token);
@@ -106,6 +126,24 @@ export class MultiPlayerInterface {
     console.log("Username: ", this.userdata.name);
 
     return rslt;
+  }
+
+  checkForActiveToken() {
+    let pretoken = sessionStorage.getItem("token");
+    if (pretoken) {
+      let preuserdata = HathoraClient.getUserFromToken(pretoken);
+      console.log(pretoken, preuserdata);
+
+      if (preuserdata) {
+        //return userdata
+        console.log("Token Data: ***********************************************************************");
+        console.log("User Token: ", pretoken);
+        console.log("UserID: ", preuserdata.id);
+        console.log("User type: ", preuserdata.type);
+        console.log("Username: ", preuserdata.name);
+        return preuserdata;
+      }
+    } else undefined;
   }
 
   async getPublicLobbies() {
