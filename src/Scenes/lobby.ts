@@ -6,6 +6,9 @@ import { Region, LobbyVisibility } from "@hathora/cloud-sdk-typescript/dist/sdk/
 import { Regions } from "../../_SqueletoECS/Multiplayer";
 import { LobbyStatus } from "../types";
 
+//@ts-ignore
+import info from "../Assets/info.svg";
+
 export class Lobby extends Scene {
   lobbyInterval: NodeJS.Timeout | undefined;
   servers: string[] = [];
@@ -76,10 +79,13 @@ export class Lobby extends Scene {
   entitySystems: any = [];
   sceneSystems: any = [];
   public template = `
+    <style>
+    
+    </style>
     <scene-layer>
         <div class="mygrid">
           <div class="titleblock">
-            <div class="lobbytitle">Orbit Connect</div>
+            <div class="lobbytitle">ORBIT CONNECT</div>
             <div class="userdata">
               <div class="userid">
                 UserID: \${userdata.id}
@@ -90,14 +96,20 @@ export class Lobby extends Scene {
             </div>
           </div>
           <div class="matchesblock">
-            <div class="matchestitle">Matches</div>
+            <div class="matchestitle">
+              MATCHES
+              <div class="infoIcon" title="This section shows all active matches that one can join, if none available, you can create a new match to the right"></div>
+            </div>
             <div class="matchesheader">
-              <div>Type</div>
-              <div>Status</div>
-              <div>RoomID</div>
-              <div>Creator</div>
-              <div>Details</div>
-              <div>Join</div>
+              <div>TYPE</div>
+              <div style="display: flex; justify-content: center; align-items: flex-start; gap: 2px;">
+                STATUS
+                <div class="infoIcon" title="EMPTY = 0 players in room, WAITING = 1 player in room, FULL=2 players in room (can't be joined), AI=1 person playing single player mode"></div>
+              </div>
+              <div>ROOMID</div>
+              <div>WHO</div>
+              <div>DETAILS</div>
+              <div>JOIN</div>
             </div>
             <div class="openMatches" >
               <div class="openMatch" \${match <=* openMatches:id}>
@@ -106,29 +118,41 @@ export class Lobby extends Scene {
                 <div class="matches_rid">\${match.id}</div>
                 <div class="matches_creator">\${match.who}</div>
                 <div class="matches_deets">\${match.when}</div>
-                <div class="matches_join_button" \${click@=>joinPublic}>JOIN</div>
+                <button class="matches_join_button" \${click@=>joinPublic}>JOIN</button>
               </div>
             </div>
           </div>
           <div class="createblock">
-            <div>Create New Match</div>
+            <div class="create_title">
+              CREATE NEW MATCH
+              <div class="infoIcon" title="This section lets you create a new match, all you need is to find the nearest server, and select PRIVATE or PUBLIC game"></div>
+            </div>
             <div class="servers">
-              <div>Servers</div>
-              <select \${==>serverDropdown}>
-                <option \${serv<=*servers}>\${serv}</option>
+              <div class="create_title">Servers</div>
+              <select class="serverdropdown" \${==>serverDropdown}>
+                <option  class="serverdropdownOptions" \${serv<=*servers}>\${serv}</option>
               </select>
             </div>
             <div class="buttoncontainer">
-              <div class="public matches_join_button" \${click@=>createPublic}>Public</div>
-              <div class="private matches_join_button" \${click@=>createPrivate}>Private</div>
+              <button class="public matches_join_button" \${click@=>createPublic}>
+                PUBLIC
+                
+              </button>
+              <button class="private matches_join_button" \${click@=>createPrivate}>
+                PRIVATE
+                <div class="infoIcon" title="A Private Match only shows up for you in your client, you must share the roomID with a friend"></div>
+              </button>
             </div>
             
           </div>
           <div class="joinblock">
-            <div class="lobby_join_title">Join Match</div>
+            <div class="lobby_join_title">
+              JOIN MATCH
+              <div class="infoIcon" title="If you receive a private roomID from friend, you enter it here to join the match directly"></div>
+            </div>
             <div class="matchInput_container">
               <input type="text" max="13" class="matchInput"/ \${value<=>directPublicID}>
-              <div class="matchJoinButton matches_join_button" \${click@=>joinDirectPublic}>JOIN</div>
+              <button class="matchJoinButton matches_join_button" \${click@=>joinDirectPublic}>JOIN</button>
             </div>
           </div>
 
@@ -226,7 +250,10 @@ export class Lobby extends Scene {
     else this.lobbyInterval = setInterval(this.updateLobby, 2000);
   };
 
-  public exit(): void {
-    clearInterval(this.lobbyInterval);
+  public exit(): Promise<void> {
+    return new Promise(resolve => {
+      clearInterval(this.lobbyInterval);
+      resolve();
+    });
   }
 }
