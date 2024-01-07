@@ -27,6 +27,7 @@
     "chance": "^1.1.11",
     "dotenv": "^16.3.1",
     "lodash": "latest",
+    "ogl": "^1.0.3",
     "path": "^0.12.7",
     "ts-node": "^10.9.1",
     "uuid": "latest"

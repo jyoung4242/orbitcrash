@@ -1,4 +1,13 @@
 /*style.css*/
+@font-face {
+  font-family: hero;
+  src: url("./Assets/baron_neue/Baron Neue.otf");
+}
+
+@font-face {
+  font-family: subtext;
+  src: url("./Assets/georgia-2-cufonfonts/georgia.ttf");
+}
 
 * {
   user-select: none;
@@ -256,10 +265,12 @@ body {
 }
 
 blur-layer {
+  position: fixed;
   display: block;
   width: 100%;
   height: 100%;
   background-color: #000000bb;
+  z-index: 99998;
 }
 waiting-modal {
   position: fixed;
@@ -493,6 +504,7 @@ inactivity-timer {
 }
 
 version-text {
+  font-family: subtext;
   position: fixed;
   bottom: 2px;
   right: 2px;

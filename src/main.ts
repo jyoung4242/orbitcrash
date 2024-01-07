@@ -96,8 +96,8 @@ window.myHathoraClient = new MultiPlayerInterface(
     }
   },
   9000,
-  [AuthenticationType.anonymous],
-  false // true = local, false = cloud
+  [AuthenticationType.anonymous, AuthenticationType.nickname],
+  true // true = local, false = cloud
 );
 
 // Scenes
